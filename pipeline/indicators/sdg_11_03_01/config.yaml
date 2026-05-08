@@ -1,0 +1,12 @@
+datasets:
+  countries: "FAO/GAUL_SIMPLIFIED_500m/2015/level0"
+  wsf2019: "projects/sat-io/open-datasets/WSF/WSF_2019"
+  embeddings: "GOOGLE/SATELLITE_EMBEDDING/V1/ANNUAL"
+
+parameters:
+  sample_points: 25
+  sample_scale: 30
+  embedding_scale: 10
+  threshold: 0.75
+  trees: 10
+  seed: 42

@@ -10,7 +10,7 @@ import os
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 import google.auth
 from google.auth.transport.requests import Request as GoogleAuthRequest
 
@@ -19,38 +19,99 @@ try:
 except Exception:
     storage = None
 
-try:
-    # Works when imported as module: orbit_unops.pipeline.api
-    from .main import get_task_status, run_export
-except ImportError:
-    # Works when run directly from pipeline folder.
-    from main import get_task_status, run_export
+if __package__:
+    # Running as part of the orbit_unops package (e.g. via uvicorn or import).
+    from .indicators.sdg_11_03_01.retrieval_method import run_11_03_01
+    from .indicators.sdg_15_01_01.retrieval_method import run_15_01_01
+    from .utils.gee_common import get_task_status
+else:
+    # Running directly from the pipeline/ folder.
+    from indicators.sdg_11_03_01.retrieval_method import run_11_03_01
+    from indicators.sdg_15_01_01.retrieval_method import run_15_01_01
+    from utils.gee_common import get_task_status
+
+# ---------------------------------------------------------------------------
+# Indicator routing registry — add new indicators here without touching
+# the dispatch logic in _run_export_job.
+# ---------------------------------------------------------------------------
+_INDICATOR_REGISTRY: Dict[str, Any] = {
+    "11.3.1": run_11_03_01,
+    "15.1.1": run_15_01_01,
+}
+
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+
 class ExportRequest(BaseModel):
-    country: str = Field(..., description="Country name matching GAUL ADM0_NAME")
-    map_year: int = 2019
-    sample_points: int = 25
-    sample_scale: int = 30
-    embedding_scale: int = 10
-    threshold: float = 0.75
-    trees: int = 10
-    seed: int = 42
+    indicator_id: str = Field(
+        ..., description="SDG indicator identifier, e.g. '11.3.1' or '15.1.1'"
+    )
+    country: Optional[str] = Field(
+        None,
+        description="Country name matching GAUL ADM0_NAME. "
+                    "Required when aoi_geojson is not provided.",
+    )
+    aoi_geojson: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Custom Area of Interest as a GeoJSON geometry or "
+                    "FeatureCollection. Takes precedence over country when both are supplied.",
+    )
+    map_year: int = Field(
+        ..., description="Year of satellite embedding used for classifier training"
+    )
+    sample_points: Optional[int] = None
+    sample_scale: Optional[int] = None
+    embedding_scale: Optional[int] = None
+    threshold: Optional[float] = None
+    trees: Optional[int] = None
+    seed: Optional[int] = None
     project: Optional[str] = None
-    year_start: int = 2020
-    year_end: int = 2021
+    year_start: int = Field(
+        ..., description="First year of the multi-year prediction range (inclusive)"
+    )
+    year_end: int = Field(
+        ..., description="Last year of the multi-year prediction range (inclusive)"
+    )
     export_name: Optional[str] = None
     gcs_bucket: str
     gcs_prefix: Optional[str] = None
 
-    @field_validator("country")
+    # ------------------------------------------------------------------
+    # Model-level validation
+    # ------------------------------------------------------------------
+
+    @model_validator(mode="after")
+    def validate_aoi_or_country(self) -> "ExportRequest":
+        """Ensure at least one spatial target is provided."""
+        if not self.country and not self.aoi_geojson:
+            raise ValueError(
+                "At least one of 'country' or 'aoi_geojson' must be provided."
+            )
+        return self
+
+    # ------------------------------------------------------------------
+    # Field-level validators
+    # ------------------------------------------------------------------
+
+    @field_validator("indicator_id")
     @classmethod
-    def validate_country(cls, value: str) -> str:
-        if not value or not value.strip():
-            raise ValueError("country is required")
-        return value.strip()
+    def validate_indicator_id(cls, value: str) -> str:
+        if value not in _INDICATOR_REGISTRY:
+            supported = ", ".join(f"'{k}'" for k in _INDICATOR_REGISTRY)
+            raise ValueError(
+                f"Unsupported indicator_id '{value}'. Supported: {supported}."
+            )
+        return value
+
+    @field_validator("country", mode="before")
+    @classmethod
+    def validate_country(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped if stripped else None
 
     @field_validator("gcs_bucket")
     @classmethod
@@ -61,8 +122,9 @@ class ExportRequest(BaseModel):
 
     @field_validator("threshold")
     @classmethod
-    def validate_threshold(cls, value: float) -> float:
-        if value < 0 or value > 1:
+    def validate_threshold(cls, value: Optional[float]) -> Optional[float]:
+        """Only validate if a value is explicitly provided; None means use config default."""
+        if value is not None and (value < 0 or value > 1):
             raise ValueError("threshold must be between 0 and 1")
         return value
 
@@ -73,6 +135,7 @@ class ExportRequest(BaseModel):
         if year_start is not None and value < year_start:
             raise ValueError("year_end must be >= year_start")
         return value
+
 
 class ExportStatusResponse(BaseModel):
     job_id: str
@@ -94,6 +157,7 @@ class FileDeleteResponse(BaseModel):
     fileId: str
     deleted: int
     files: list[Dict[str, str]]
+
 
 app = FastAPI(title="UNOPS Export API", version="1.0.0")
 
@@ -205,6 +269,7 @@ def _list_files_for_file_id(file_id: str) -> list[Dict[str, str]]:
     matched_files.sort(key=lambda item: item["name"])
     return matched_files
 
+
 def _set_job(job_id: str, updates: Dict[str, Any]) -> None:
     with _jobs_lock:
         if job_id not in _jobs:
@@ -212,21 +277,34 @@ def _set_job(job_id: str, updates: Dict[str, Any]) -> None:
         _jobs[job_id].update(updates)
         _jobs[job_id]["updated_at"] = utc_now_iso()
 
+
 def _run_export_job(job_id: str, request: ExportRequest) -> None:
+    """Background task: dispatch to the correct indicator function."""
     _set_job(job_id, {"status": "running"})
     try:
         file_id = _jobs[job_id]["file_id"]
         request_data = request.model_dump()
-        request_data["gcs_prefix"] = _build_file_scoped_prefix(request_data.get("gcs_prefix"), file_id)
-        result = run_export(**request_data)
+        request_data["gcs_prefix"] = _build_file_scoped_prefix(
+            request_data.get("gcs_prefix"), file_id
+        )
+
+        # Route to the correct indicator function based on indicator_id.
+        indicator_fn = _INDICATOR_REGISTRY[request.indicator_id]
+
+        # Strip API-layer-only keys that indicator functions don't accept.
+        indicator_data = {k: v for k, v in request_data.items() if k != "indicator_id"}
+
+        result = indicator_fn(**indicator_data)
         result["fileId"] = file_id
         _set_job(job_id, {"status": "completed", "result": result})
     except Exception as exc:
         _set_job(job_id, {"status": "failed", "error": str(exc)})
 
+
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
+
 
 @app.post("/exports", response_model=ExportStatusResponse, status_code=202)
 def create_export(request: ExportRequest, background_tasks: BackgroundTasks) -> ExportStatusResponse:
@@ -253,6 +331,7 @@ def create_export(request: ExportRequest, background_tasks: BackgroundTasks) -> 
 
     background_tasks.add_task(_run_export_job, job_id, request)
     return ExportStatusResponse(**_jobs[job_id])
+
 
 @app.get("/exports/{job_id}", response_model=ExportStatusResponse)
 def get_export(job_id: str, refresh_task_status: bool = True) -> ExportStatusResponse:

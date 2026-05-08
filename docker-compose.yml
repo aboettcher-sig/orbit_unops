@@ -1,0 +1,41 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: . # Build context is the orbit_unops/ directory
+      dockerfile: Dockerfile
+    image: orbit-unops-api:latest
+    container_name: orbit_unops_api
+    ports:
+      - "8000:8000" # host:container
+    environment:
+      # ----------------------------------------------------------------
+      # Google Earth Engine / Cloud credentials
+      # Mount a service-account JSON key and point GOOGLE_APPLICATION_
+      # CREDENTIALS at it, OR pass the path to an already-authenticated
+      # credential store via volume below.
+      # ----------------------------------------------------------------
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-}
+      - GEE_PROJECT=${GEE_PROJECT:-}
+      - GOOGLE_CLOUD_PROJECT=${GOOGLE_CLOUD_PROJECT:-}
+      # ----------------------------------------------------------------
+      # GCS signed-URL mode: auto | signed | public
+      # ----------------------------------------------------------------
+      - GCS_URL_MODE=${GCS_URL_MODE:-auto}
+      - SIGNING_SERVICE_ACCOUNT_EMAIL=${SIGNING_SERVICE_ACCOUNT_EMAIL:-}
+
+    volumes:
+      # Uncomment to mount a service-account key into the container:
+      # - ./credentials/service-account.json:/secrets/sa.json:ro
+
+      # Mount the local gcloud auth store for development (remove in prod):
+      - ${APPDATA}/gcloud:/root/.config/gcloud:ro
+
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s

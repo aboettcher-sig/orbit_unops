@@ -3,72 +3,132 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>UNOPS Export POC</title>
+  <title>UNOPS Export Dashboard</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet-Draw CSS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
   <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
     body {
       font-family: Arial, sans-serif;
-      max-width: 900px;
+      max-width: 960px;
       margin: 32px auto;
       padding: 0 16px;
       color: #1a1a1a;
+      background: #f4f6fa;
     }
-    h1 { margin-bottom: 8px; }
+
+    h1 { margin-bottom: 4px; font-size: 1.5rem; }
+    h2 { font-size: 1.1rem; margin-bottom: 10px; color: #444; }
+
+    .muted { color: #666; font-size: 0.9rem; margin-bottom: 16px; }
+
     .card {
-      border: 1px solid #ddd;
+      background: #fff;
+      border: 1px solid #dde0e8;
       border-radius: 10px;
-      padding: 16px;
+      padding: 20px;
       margin-bottom: 16px;
     }
+
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
       gap: 12px;
     }
+
     label {
       display: block;
-      font-size: 0.9rem;
+      font-size: 0.85rem;
       margin-bottom: 4px;
       font-weight: 600;
+      color: #333;
     }
+
     input, select {
       width: 100%;
-      box-sizing: border-box;
-      padding: 8px;
+      padding: 8px 10px;
       border-radius: 6px;
       border: 1px solid #ccc;
+      font-size: 0.9rem;
+      background: #fafafa;
     }
+
+    input:focus, select:focus {
+      outline: 2px solid #0b5fff;
+      border-color: #0b5fff;
+      background: #fff;
+    }
+
+    /* AOI hint banner */
+    #aoiHint {
+      font-size: 0.82rem;
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      background: #e8f0ff;
+      border: 1px solid #b3c8ff;
+      color: #1a3d99;
+    }
+    #aoiHint.using-aoi  { background: #d6f5df; border-color: #7ed99e; color: #0b5d1e; }
+    #aoiHint.using-name { background: #fff4ce; border-color: #f0cc5e; color: #7a5a00; }
+
+    /* Map */
+    #map {
+      height: 380px;
+      border-radius: 8px;
+      border: 1px solid #ccc;
+      margin-bottom: 12px;
+    }
+
+    /* Buttons */
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
     button {
-      padding: 10px 14px;
+      padding: 10px 16px;
       border: none;
       border-radius: 8px;
       cursor: pointer;
       font-weight: 700;
-      background: #0b5fff;
-      color: white;
+      font-size: 0.9rem;
     }
-    button:disabled { opacity: 0.65; cursor: not-allowed; }
-    .muted { color: #666; font-size: 0.9rem; }
+    #startBtn  { background: #0b5fff; color: #fff; }
+    #stopBtn   { background: #666;    color: #fff; }
+    #clearAoiBtn { background: #e0e4ee; color: #333; }
+    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    /* Status */
     .status {
       font-weight: 700;
-      padding: 5px 8px;
+      padding: 4px 10px;
       border-radius: 6px;
       display: inline-block;
       margin-bottom: 10px;
+      font-size: 0.9rem;
     }
     .queued, .running { background: #fff4ce; color: #7a5a00; }
     .completed { background: #d6f5df; color: #0b5d1e; }
-    .failed { background: #ffe1e1; color: #8d0000; }
+    .failed    { background: #ffe1e1; color: #8d0000; }
+    .idle      { background: #e8e8e8; color: #555; }
+
     pre {
       white-space: pre-wrap;
       word-break: break-word;
       background: #f7f7f8;
       border-radius: 8px;
-      padding: 10px;
+      padding: 12px;
       border: 1px solid #ececec;
+      font-size: 0.82rem;
+      max-height: 340px;
+      overflow-y: auto;
     }
+
     .downloads {
-      margin-top: 12px;
-      padding-top: 12px;
+      margin-top: 14px;
+      padding-top: 14px;
       border-top: 1px solid #ececec;
     }
     .download-links a {
@@ -76,104 +136,232 @@
       margin-right: 8px;
       margin-top: 6px;
       background: #0b5fff;
-      color: white;
+      color: #fff;
       text-decoration: none;
       border-radius: 6px;
-      padding: 8px 10px;
+      padding: 8px 12px;
       font-weight: 700;
+      font-size: 0.85rem;
     }
+    .meta-row { display: flex; gap: 24px; font-size: 0.85rem; margin-bottom: 10px; flex-wrap: wrap; }
+    .meta-row span strong { margin-right: 4px; }
   </style>
 </head>
 <body>
-  <h1>UNOPS Export Dashboard (POC)</h1>
-  <p class="muted">Simple frontend to trigger <code>POST /exports</code>, poll <code>GET /export-status/{fileId}</code>, download from GCS, then cleanup via <code>DELETE /export-delete/{fileId}</code>.</p>
 
+  <h1>UNOPS Export Dashboard <span style="font-weight:400;font-size:1rem;color:#888;">(POC)</span></h1>
+  <p class="muted">
+    Trigger <code>POST /exports</code>, poll <code>GET /export-status/{fileId}</code>,
+    download from GCS, then clean up via <code>DELETE /export-delete/{fileId}</code>.
+  </p>
+
+  <!-- ── Configuration card ──────────────────────────────────────────── -->
   <div class="card">
+    <h2>Configuration</h2>
     <div class="grid">
+
       <div>
         <label for="apiBase">API Base URL</label>
         <input id="apiBase" value="http://127.0.0.1:8000" />
       </div>
+
       <div>
-        <label for="country">Country</label>
-        <input id="country" value="Colombia" />
+        <label for="indicator">Indicator</label>
+        <select id="indicator">
+          <option value="11.3.1">11.3.1 — Urban Extent</option>
+          <option value="15.1.1">15.1.1 — Forest Area</option>
+        </select>
       </div>
+
       <div>
-        <label for="mapYear">Map Year</label>
-        <input id="mapYear" type="number" value="2019" />
+        <label for="mapYear">Map Year <span style="font-weight:400;color:#888;">(training)</span></label>
+        <input id="mapYear" type="number" placeholder="e.g. 2019" />
       </div>
+
       <div>
         <label for="yearStart">Year Start</label>
-        <input id="yearStart" type="number" value="2020" />
+        <input id="yearStart" type="number" placeholder="e.g. 2020" />
       </div>
+
       <div>
         <label for="yearEnd">Year End</label>
-        <input id="yearEnd" type="number" value="2021" />
+        <input id="yearEnd" type="number" placeholder="e.g. 2022" />
       </div>
+
       <div>
-        <label for="threshold">Threshold</label>
+        <label for="threshold">Threshold <span style="font-weight:400;color:#888;">(0–1)</span></label>
         <input id="threshold" type="number" step="0.01" value="0.75" />
       </div>
+
       <div>
         <label for="gcsBucket">GCS Bucket</label>
-        <input id="gcsBucket" value="your-gcs-bucket" />
+        <input id="gcsBucket" placeholder="your-gcs-bucket" />
       </div>
+
       <div>
-        <label for="gcsPrefix">GCS Prefix (optional)</label>
+        <label for="gcsPrefix">GCS Prefix <span style="font-weight:400;color:#888;">(optional)</span></label>
         <input id="gcsPrefix" value="exports/unops" />
       </div>
+
     </div>
-    <br />
-    <button id="startBtn">Start Export</button>
-    <button id="stopBtn" style="background:#666; margin-left:8px;" disabled>Stop Polling</button>
   </div>
 
+  <!-- ── AOI card ─────────────────────────────────────────────────────── -->
   <div class="card">
-    <div id="statusBadge" class="status queued">idle</div>
-    <div><strong>Task ID:</strong> <span id="jobId">-</span></div>
-    <div><strong>File ID:</strong> <span id="fileId">-</span></div>
-    <div><strong>Last Update:</strong> <span id="lastUpdate">-</span></div>
-    <h3>Response</h3>
+    <h2>Area of Interest (AOI)</h2>
+    <p class="muted" style="margin-bottom:10px;">
+      Draw a polygon on the map <strong>or</strong> type a country name below.
+      A drawn polygon takes priority when both are provided.
+    </p>
+
+    <div id="aoiHint">No polygon drawn — using country name below.</div>
+
+    <!-- Leaflet map -->
+    <div id="map"></div>
+
+    <div style="max-width:340px;">
+      <label for="country">Country name <span style="font-weight:400;color:#888;">(used when no polygon is drawn)</span></label>
+      <input id="country" placeholder="e.g. Colombia" />
+    </div>
+
+    <div class="btn-row">
+      <button id="clearAoiBtn" disabled>Clear Drawn Polygon</button>
+    </div>
+  </div>
+
+  <!-- ── Actions ──────────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="btn-row">
+      <button id="startBtn">▶ Start Export</button>
+      <button id="stopBtn" disabled>■ Stop Polling</button>
+    </div>
+  </div>
+
+  <!-- ── Status / output card ─────────────────────────────────────────── -->
+  <div class="card">
+    <div id="statusBadge" class="status idle">idle</div>
+    <div class="meta-row">
+      <span><strong>Job ID:</strong> <span id="jobId">—</span></span>
+      <span><strong>File ID:</strong> <span id="fileId">—</span></span>
+      <span><strong>Last update:</strong> <span id="lastUpdate">—</span></span>
+    </div>
+    <h2>Response</h2>
     <pre id="output">No request yet.</pre>
+
     <div id="downloads" class="downloads" style="display:none;">
-      <h3>Downloads</h3>
-      <button id="downloadBtn" style="display:none;">Download</button>
+      <h2>Downloads</h2>
+      <button id="downloadBtn" style="display:none;">⬇ Download &amp; Cleanup</button>
       <div id="downloadLinks" class="download-links"></div>
     </div>
   </div>
 
-  <script>
-    const statusBadge = document.getElementById("statusBadge");
-    const output = document.getElementById("output");
-    const jobIdEl = document.getElementById("jobId");
-    const fileIdEl = document.getElementById("fileId");
-    const lastUpdateEl = document.getElementById("lastUpdate");
-    const startBtn = document.getElementById("startBtn");
-    const stopBtn = document.getElementById("stopBtn");
-    const downloadsEl = document.getElementById("downloads");
-    const downloadBtn = document.getElementById("downloadBtn");
-    const downloadLinksEl = document.getElementById("downloadLinks");
-    let pollTimer = null;
-    const task = {
-      taskId: null,
-      fileId: null,
-      downloadUrl: null,
-    };
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet-Draw JS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
 
+  <script>
+    // ── State ────────────────────────────────────────────────────────────
+    let currentAoiGeojson = null;   // GeoJSON geometry object or null
+    let pollTimer = null;
+    const task = { taskId: null, fileId: null, downloadUrl: null };
+
+    // ── DOM refs ─────────────────────────────────────────────────────────
+    const statusBadge   = document.getElementById("statusBadge");
+    const output        = document.getElementById("output");
+    const jobIdEl       = document.getElementById("jobId");
+    const fileIdEl      = document.getElementById("fileId");
+    const lastUpdateEl  = document.getElementById("lastUpdate");
+    const startBtn      = document.getElementById("startBtn");
+    const stopBtn       = document.getElementById("stopBtn");
+    const clearAoiBtn   = document.getElementById("clearAoiBtn");
+    const downloadsEl   = document.getElementById("downloads");
+    const downloadBtn   = document.getElementById("downloadBtn");
+    const downloadLinksEl = document.getElementById("downloadLinks");
+    const aoiHint       = document.getElementById("aoiHint");
+
+    // ── Leaflet map setup ─────────────────────────────────────────────────
+    const map = L.map("map").setView([20, 0], 2);
+
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "© OpenStreetMap contributors",
+      maxZoom: 18,
+    }).addTo(map);
+
+    // FeatureGroup to hold drawn layers
+    const drawnItems = new L.FeatureGroup();
+    map.addLayer(drawnItems);
+
+    // Draw control — only polygon + rectangle to keep UI focused
+    const drawControl = new L.Control.Draw({
+      edit: { featureGroup: drawnItems },
+      draw: {
+        polygon:   true,
+        rectangle: true,
+        circle:    false,
+        marker:    false,
+        polyline:  false,
+        circlemarker: false,
+      },
+    });
+    map.addControl(drawControl);
+
+    // ── AOI helpers ───────────────────────────────────────────────────────
+    function updateAoiHint() {
+      if (currentAoiGeojson) {
+        aoiHint.textContent = "✔ Polygon drawn — AOI will be sent as GeoJSON geometry.";
+        aoiHint.className = "using-aoi";
+        clearAoiBtn.disabled = false;
+      } else {
+        aoiHint.textContent = "No polygon drawn — using country name below.";
+        aoiHint.className = "using-name";
+        clearAoiBtn.disabled = true;
+      }
+    }
+
+    // When a shape is created, save its geometry GeoJSON
+    map.on(L.Draw.Event.CREATED, function (e) {
+      // Only allow one polygon at a time
+      drawnItems.clearLayers();
+      drawnItems.addLayer(e.layer);
+      currentAoiGeojson = e.layer.toGeoJSON().geometry;
+      updateAoiHint();
+    });
+
+    // When shapes are edited, refresh GeoJSON
+    map.on(L.Draw.Event.EDITED, function (e) {
+      const layers = e.layers.getLayers();
+      if (layers.length > 0) {
+        currentAoiGeojson = layers[layers.length - 1].toGeoJSON().geometry;
+      }
+      updateAoiHint();
+    });
+
+    // When shapes are deleted
+    map.on(L.Draw.Event.DELETED, function () {
+      if (drawnItems.getLayers().length === 0) {
+        currentAoiGeojson = null;
+        updateAoiHint();
+      }
+    });
+
+    // Clear button
+    clearAoiBtn.addEventListener("click", function () {
+      drawnItems.clearLayers();
+      currentAoiGeojson = null;
+      updateAoiHint();
+    });
+
+    // ── Utility helpers ───────────────────────────────────────────────────
     function setStatus(statusText) {
       statusBadge.textContent = statusText;
       statusBadge.className = `status ${statusText}`;
     }
 
-    function jsonPretty(v) {
-      return JSON.stringify(v, null, 2);
-    }
+    function jsonPretty(v) { return JSON.stringify(v, null, 2); }
 
     function stopPolling() {
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-      }
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
       stopBtn.disabled = true;
     }
 
@@ -186,36 +374,34 @@
         task.downloadUrl = null;
         return;
       }
-
       task.downloadUrl = files[0].url;
       downloadBtn.style.display = "inline-block";
       downloadLinksEl.innerHTML = files
-        .map((file) => `<div class="muted">Ready: ${file.name}</div>`)
+        .map((f) => `<div class="muted" style="margin-top:4px;">Ready: ${f.name}</div>`)
         .join("");
       downloadsEl.style.display = "block";
     }
 
     async function fetchExportStatus(apiBase, fileId) {
       const res = await fetch(`${apiBase}/export-status/${fileId}`);
-      if (!res.ok) throw new Error(`GET /export-status/${fileId} failed (${res.status})`);
-      return await res.json();
+      if (!res.ok) throw new Error(`GET /export-status/${fileId} → ${res.status}`);
+      return res.json();
     }
 
     async function cleanupExportFiles(apiBase, fileId) {
       const res = await fetch(`${apiBase}/export-delete/${fileId}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(`DELETE /export-delete/${fileId} failed (${res.status}): ${jsonPretty(data)}`);
+        throw new Error(`DELETE /export-delete/${fileId} → ${res.status}: ${jsonPretty(data)}`);
       }
-      return await res.json();
+      return res.json();
     }
 
+    // ── Download + cleanup ────────────────────────────────────────────────
     async function triggerDownloadAndCleanup() {
       try {
         const apiBase = document.getElementById("apiBase").value.trim();
-        if (!task.downloadUrl || !task.fileId) {
-          throw new Error("No download URL is available yet.");
-        }
+        if (!task.downloadUrl || !task.fileId) throw new Error("No download URL available yet.");
 
         const anchor = document.createElement("a");
         anchor.href = task.downloadUrl;
@@ -227,18 +413,26 @@
         anchor.remove();
 
         const deleteResult = await cleanupExportFiles(apiBase, task.fileId);
-        output.textContent = `${output.textContent}\n\nCleanup result:\n${jsonPretty(deleteResult)}`;
+        output.textContent += `\n\nCleanup result:\n${jsonPretty(deleteResult)}`;
       } catch (err) {
         output.textContent = `Download/Cleanup error: ${err.message}`;
       }
     }
 
+    // ── Main export trigger ───────────────────────────────────────────────
     async function startExport() {
+      // Validate: need at least country or drawn AOI
+      const countryVal = document.getElementById("country").value.trim();
+      if (!currentAoiGeojson && !countryVal) {
+        alert("Please draw a polygon on the map OR enter a country name before starting the export.");
+        return;
+      }
+
       stopPolling();
       startBtn.disabled = true;
-      output.textContent = "Sending request...";
-      jobIdEl.textContent = "-";
-      fileIdEl.textContent = "-";
+      output.textContent = "Sending request…";
+      jobIdEl.textContent = "—";
+      fileIdEl.textContent = "—";
       task.taskId = null;
       task.fileId = null;
       task.downloadUrl = null;
@@ -248,15 +442,27 @@
 
       try {
         const apiBase = document.getElementById("apiBase").value.trim();
+
+        // Build payload — aoi_geojson takes priority over country
         const payload = {
-          country: document.getElementById("country").value.trim(),
-          map_year: Number(document.getElementById("mapYear").value),
-          year_start: Number(document.getElementById("yearStart").value),
-          year_end: Number(document.getElementById("yearEnd").value),
-          threshold: Number(document.getElementById("threshold").value),
-          gcs_bucket: document.getElementById("gcsBucket").value.trim(),
-          gcs_prefix: document.getElementById("gcsPrefix").value.trim() || null,
+          indicator_id: document.getElementById("indicator").value,
+          map_year:     Number(document.getElementById("mapYear").value),
+          year_start:   Number(document.getElementById("yearStart").value),
+          year_end:     Number(document.getElementById("yearEnd").value),
+          threshold:    Number(document.getElementById("threshold").value),
+          gcs_bucket:   document.getElementById("gcsBucket").value.trim(),
+          gcs_prefix:   document.getElementById("gcsPrefix").value.trim() || null,
         };
+
+        if (currentAoiGeojson) {
+          // Use drawn polygon; country is not required by the backend
+          payload.aoi_geojson = currentAoiGeojson;
+          payload.country = null;
+        } else {
+          // Fall back to typed country name
+          payload.country = countryVal;
+          payload.aoi_geojson = null;
+        }
 
         const res = await fetch(`${apiBase}/exports`, {
           method: "POST",
@@ -269,16 +475,14 @@
 
         task.taskId = data.taskId || data.task_id || data.job_id;
         task.fileId = data.fileId || data.file_id;
-        jobIdEl.textContent = task.taskId || "-";
-        fileIdEl.textContent = task.fileId || "-";
+        jobIdEl.textContent  = task.taskId || "—";
+        fileIdEl.textContent = task.fileId  || "—";
         setStatus(data.status || "queued");
         output.textContent = jsonPretty(data);
         renderDownloadState({ ready: false, files: [] });
         lastUpdateEl.textContent = new Date().toLocaleString();
 
-        if (!task.fileId) {
-          throw new Error("Response did not include fileId.");
-        }
+        if (!task.fileId) throw new Error("Response did not include fileId.");
 
         stopBtn.disabled = false;
         pollTimer = setInterval(async () => {
@@ -288,16 +492,14 @@
             output.textContent = jsonPretty(statusData);
             renderDownloadState(statusData);
             lastUpdateEl.textContent = new Date().toLocaleString();
-
-            if (statusData.ready === true) {
-              stopPolling();
-            }
+            if (statusData.ready === true) stopPolling();
           } catch (err) {
             setStatus("failed");
             output.textContent = `Polling error: ${err.message}`;
             stopPolling();
           }
         }, 4000);
+
       } catch (err) {
         setStatus("failed");
         output.textContent = `Request error: ${err.message}`;
@@ -306,9 +508,13 @@
       }
     }
 
+    // ── Event listeners ───────────────────────────────────────────────────
     startBtn.addEventListener("click", startExport);
     stopBtn.addEventListener("click", stopPolling);
     downloadBtn.addEventListener("click", triggerDownloadAndCleanup);
+
+    // Initialise hint on page load
+    updateAoiHint();
   </script>
 </body>
 </html>

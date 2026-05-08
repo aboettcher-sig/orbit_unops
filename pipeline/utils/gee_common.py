@@ -1,0 +1,111 @@
+"""Common Google Earth Engine utilities shared across all indicators."""
+
+# NOTE: Keep this module free of indicator-specific logic.
+
+from typing import Any, Dict, Optional
+
+import ee
+
+
+def initialize_ee(project: Optional[str] = None) -> None:
+    """Initialize Earth Engine for server or CLI execution."""
+    try:
+        if project:
+            ee.Initialize(project=project)
+        else:
+            ee.Initialize()
+    except Exception as exc:
+        raise RuntimeError(
+            "Failed to initialize Earth Engine. "
+            "Authenticate first with service account credentials or "
+            "'earthengine authenticate'."
+        ) from exc
+
+
+def _validate_inputs(
+    country: Optional[str],
+    year_start: int,
+    year_end: int,
+    threshold: float,
+    gcs_bucket: str,
+) -> None:
+    if country is not None and not country.strip():
+        raise ValueError("'country' must not be blank when provided.")
+    if year_end < year_start:
+        raise ValueError("'year_end' must be >= 'year_start'.")
+    if not (0.0 <= threshold <= 1.0):
+        raise ValueError("'threshold' must be between 0 and 1.")
+    if not gcs_bucket or not gcs_bucket.strip():
+        raise ValueError("'gcs_bucket' is required.")
+
+
+def get_task_status(task_id: str, project: Optional[str] = None) -> Dict[str, Any]:
+    """Return Earth Engine task status by task id."""
+    if not task_id:
+        raise ValueError("task_id is required")
+
+    initialize_ee(project=project)
+    status_list = ee.data.getTaskStatus([task_id])
+    if not status_list:
+        raise ValueError(f"No Earth Engine task found for id '{task_id}'")
+    return status_list[0]
+
+
+# ---------------------------------------------------------------------------
+# Export helpers
+# ---------------------------------------------------------------------------
+
+def export_table_to_gcs(
+    collection: "ee.FeatureCollection",
+    description: str,
+    bucket: str,
+    filename_prefix: str,
+    file_format: str = "CSV",
+) -> "ee.batch.Task":
+    """Wrap ee.batch.Export.table.toCloudStorage and start the task.
+
+    Returns the started task so callers can query ``task.status()``.
+    """
+    task = ee.batch.Export.table.toCloudStorage(
+        collection=collection,
+        description=description,
+        bucket=bucket,
+        fileNamePrefix=filename_prefix,
+        fileFormat=file_format,
+    )
+    task.start()
+    return task
+
+
+def aggregate_regional_stats(
+    image: "ee.Image",
+    geometry: "ee.Geometry",
+    scale: int,
+    reducer: "ee.Reducer" = None,
+    max_pixels: float = 1e13,
+) -> "ee.Number":
+    """Run reduceRegion and return the first (or only) result as an ee.Number.
+
+    Args:
+        image: The image whose pixels are reduced. Should have exactly one band
+               unless the reducer produces a single output key.
+        geometry: The region over which to reduce.
+        scale: Nominal scale in metres.
+        reducer: Defaults to ee.Reducer.sum().
+        max_pixels: Safety cap on pixel count (default 1e13).
+
+    Returns:
+        The reduced value as an ``ee.Number``.
+    """
+    if reducer is None:
+        reducer = ee.Reducer.sum()
+
+    result_dict = image.reduceRegion(
+        reducer=reducer,
+        geometry=geometry,
+        scale=scale,
+        maxPixels=max_pixels,
+    )
+    # Return the first value from the dictionary (works for single-band images).
+    key = image.bandNames().get(0)
+    return ee.Number(result_dict.get(key))
