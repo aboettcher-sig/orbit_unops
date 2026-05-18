@@ -20,11 +20,19 @@ if __package__:
     # Running as part of the orbit_unops package.
     from .indicators.sdg_11_03_01.retrieval_method import run_11_03_01
     from .indicators.sdg_15_01_01.retrieval_method import run_15_01_01
+    from .indicators.sdg_06_06_01.retrieval_method import run_06_06_01
+    from .indicators.sdg_15_04_02.retrieval_method import run_15_04_02
+    from .indicators.sdg_15_03_01.retrieval_method import run_15_03_01
+    from .indicators.sdg_11_01_01.retrieval_method import run_11_01_01
     from .utils.gee_common import get_task_status  # noqa: F401 (re-exported for api.py)
 else:
     # Running directly from the pipeline/ folder.
     from indicators.sdg_11_03_01.retrieval_method import run_11_03_01
     from indicators.sdg_15_01_01.retrieval_method import run_15_01_01
+    from indicators.sdg_06_06_01.retrieval_method import run_06_06_01
+    from indicators.sdg_15_04_02.retrieval_method import run_15_04_02
+    from indicators.sdg_15_03_01.retrieval_method import run_15_03_01
+    from indicators.sdg_11_01_01.retrieval_method import run_11_01_01
     from utils.gee_common import get_task_status  # noqa: F401
 
 # ---------------------------------------------------------------------------
@@ -33,6 +41,10 @@ else:
 _INDICATOR_REGISTRY: Dict[str, Any] = {
     "11.3.1": run_11_03_01,
     "15.1.1": run_15_01_01,
+    "6.6.1": run_06_06_01,
+    "15.4.2": run_15_04_02,
+    "15.3.1": run_15_03_01,
+    "11.1.1": run_11_01_01,
 }
 
 

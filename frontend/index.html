@@ -1,5 +1,6 @@
 <!doctype html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,7 +12,13 @@
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
 
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
 
     body {
       font-family: Arial, sans-serif;
@@ -22,10 +29,22 @@
       background: #f4f6fa;
     }
 
-    h1 { margin-bottom: 4px; font-size: 1.5rem; }
-    h2 { font-size: 1.1rem; margin-bottom: 10px; color: #444; }
+    h1 {
+      margin-bottom: 4px;
+      font-size: 1.5rem;
+    }
 
-    .muted { color: #666; font-size: 0.9rem; margin-bottom: 16px; }
+    h2 {
+      font-size: 1.1rem;
+      margin-bottom: 10px;
+      color: #444;
+    }
+
+    .muted {
+      color: #666;
+      font-size: 0.9rem;
+      margin-bottom: 16px;
+    }
 
     .card {
       background: #fff;
@@ -49,7 +68,8 @@
       color: #333;
     }
 
-    input, select {
+    input,
+    select {
       width: 100%;
       padding: 8px 10px;
       border-radius: 6px;
@@ -58,7 +78,8 @@
       background: #fafafa;
     }
 
-    input:focus, select:focus {
+    input:focus,
+    select:focus {
       outline: 2px solid #0b5fff;
       border-color: #0b5fff;
       background: #fff;
@@ -74,8 +95,18 @@
       border: 1px solid #b3c8ff;
       color: #1a3d99;
     }
-    #aoiHint.using-aoi  { background: #d6f5df; border-color: #7ed99e; color: #0b5d1e; }
-    #aoiHint.using-name { background: #fff4ce; border-color: #f0cc5e; color: #7a5a00; }
+
+    #aoiHint.using-aoi {
+      background: #d6f5df;
+      border-color: #7ed99e;
+      color: #0b5d1e;
+    }
+
+    #aoiHint.using-name {
+      background: #fff4ce;
+      border-color: #f0cc5e;
+      color: #7a5a00;
+    }
 
     /* Map */
     #map {
@@ -86,7 +117,13 @@
     }
 
     /* Buttons */
-    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 14px;
+    }
+
     button {
       padding: 10px 16px;
       border: none;
@@ -95,10 +132,26 @@
       font-weight: 700;
       font-size: 0.9rem;
     }
-    #startBtn  { background: #0b5fff; color: #fff; }
-    #stopBtn   { background: #666;    color: #fff; }
-    #clearAoiBtn { background: #e0e4ee; color: #333; }
-    button:disabled { opacity: 0.55; cursor: not-allowed; }
+
+    #startBtn {
+      background: #0b5fff;
+      color: #fff;
+    }
+
+    #stopBtn {
+      background: #666;
+      color: #fff;
+    }
+
+    #clearAoiBtn {
+      background: #e0e4ee;
+      color: #333;
+    }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
 
     /* Status */
     .status {
@@ -109,10 +162,27 @@
       margin-bottom: 10px;
       font-size: 0.9rem;
     }
-    .queued, .running { background: #fff4ce; color: #7a5a00; }
-    .completed { background: #d6f5df; color: #0b5d1e; }
-    .failed    { background: #ffe1e1; color: #8d0000; }
-    .idle      { background: #e8e8e8; color: #555; }
+
+    .queued,
+    .running {
+      background: #fff4ce;
+      color: #7a5a00;
+    }
+
+    .completed {
+      background: #d6f5df;
+      color: #0b5d1e;
+    }
+
+    .failed {
+      background: #ffe1e1;
+      color: #8d0000;
+    }
+
+    .idle {
+      background: #e8e8e8;
+      color: #555;
+    }
 
     pre {
       white-space: pre-wrap;
@@ -131,6 +201,7 @@
       padding-top: 14px;
       border-top: 1px solid #ececec;
     }
+
     .download-links a {
       display: inline-block;
       margin-right: 8px;
@@ -143,10 +214,73 @@
       font-weight: 700;
       font-size: 0.85rem;
     }
-    .meta-row { display: flex; gap: 24px; font-size: 0.85rem; margin-bottom: 10px; flex-wrap: wrap; }
-    .meta-row span strong { margin-right: 4px; }
+
+    .meta-row {
+      display: flex;
+      gap: 24px;
+      font-size: 0.85rem;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+
+    .meta-row span strong {
+      margin-right: 4px;
+    }
+
+    /* Per-file download links */
+    .download-link {
+      display: inline-block;
+      margin: 4px 8px 4px 0;
+      background: #e8f0ff;
+      color: #0b5fff;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 4px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      border: 1px solid #b3c8ff;
+    }
+
+    .download-link:hover {
+      background: #d0e0ff;
+    }
+
+    /* Checkbox groups */
+    .check-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 2px;
+    }
+
+    .check-group label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-weight: 400;
+      font-size: 0.88rem;
+      color: #333;
+      cursor: pointer;
+    }
+
+    .check-group input[type="checkbox"] {
+      width: 15px;
+      height: 15px;
+      flex-shrink: 0;
+      accent-color: #0b5fff;
+      cursor: pointer;
+    }
+
+    .field-label {
+      display: block;
+      font-size: 0.85rem;
+      margin-bottom: 6px;
+      font-weight: 600;
+      color: #333;
+    }
   </style>
 </head>
+
 <body>
 
   <h1>UNOPS Export Dashboard <span style="font-weight:400;font-size:1rem;color:#888;">(POC)</span></h1>
@@ -170,6 +304,10 @@
         <select id="indicator">
           <option value="11.3.1">11.3.1 — Urban Extent</option>
           <option value="15.1.1">15.1.1 — Forest Area</option>
+          <option value="6.6.1">6.6.1 — Water-related Ecosystems</option>
+          <option value="15.4.2">15.4.2 — Mountain Green Cover & Degradation</option>
+          <option value="15.3.1">15.3.1 — Land Degradation (LULC sub-indicator)</option>
+          <option value="11.1.1">11.1.1 — Informal Settlements (Proxy)</option>
         </select>
       </div>
 
@@ -179,18 +317,34 @@
       </div>
 
       <div>
-        <label for="yearStart">Year Start</label>
-        <input id="yearStart" type="number" placeholder="e.g. 2020" />
+        <label for="start_date">Start Date</label>
+        <input id="start_date" type="date" />
       </div>
 
       <div>
-        <label for="yearEnd">Year End</label>
-        <input id="yearEnd" type="number" placeholder="e.g. 2022" />
+        <label for="end_date">End Date</label>
+        <input id="end_date" type="date" />
       </div>
 
       <div>
         <label for="threshold">Threshold <span style="font-weight:400;color:#888;">(0–1)</span></label>
         <input id="threshold" type="number" step="0.01" value="0.75" />
+      </div>
+
+      <div>
+        <label for="resolution">Resolution</label>
+        <select id="resolution">
+          <option value="10m">10m (Sentinel-2)</option>
+          <option value="30m">30m (Landsat)</option>
+        </select>
+      </div>
+
+      <div>
+        <label for="priority">Priority</label>
+        <select id="priority">
+          <option value="standard">Standard</option>
+          <option value="high">High</option>
+        </select>
       </div>
 
       <div>
@@ -201,6 +355,24 @@
       <div>
         <label for="gcsPrefix">GCS Prefix <span style="font-weight:400;color:#888;">(optional)</span></label>
         <input id="gcsPrefix" value="exports/unops" />
+      </div>
+
+      <div>
+        <span class="field-label">Data Sources</span>
+        <div class="check-group">
+          <label><input type="checkbox" id="ds_sentinel2" value="Sentinel-2 Optical" /> Sentinel-2 Optical</label>
+          <label><input type="checkbox" id="ds_sentinel1" value="Sentinel-1 SAR" /> Sentinel-1 SAR</label>
+          <label><input type="checkbox" id="ds_landsat" value="Landsat 8/9" /> Landsat 8/9</label>
+        </div>
+      </div>
+
+      <div>
+        <span class="field-label">Export Formats</span>
+        <div class="check-group">
+          <label><input type="checkbox" id="ef_geotiff" value="GeoTIFF" /> GeoTIFF</label>
+          <label><input type="checkbox" id="ef_geojson" value="GeoJSON" /> GeoJSON</label>
+          <label><input type="checkbox" id="ef_csv" value="CSV" checked /> CSV</label>
+        </div>
       </div>
 
     </div>
@@ -220,7 +392,8 @@
     <div id="map"></div>
 
     <div style="max-width:340px;">
-      <label for="country">Country name <span style="font-weight:400;color:#888;">(used when no polygon is drawn)</span></label>
+      <label for="country">Country name <span style="font-weight:400;color:#888;">(used when no polygon is
+          drawn)</span></label>
       <input id="country" placeholder="e.g. Colombia" />
     </div>
 
@@ -250,7 +423,7 @@
 
     <div id="downloads" class="downloads" style="display:none;">
       <h2>Downloads</h2>
-      <button id="downloadBtn" style="display:none;">⬇ Download &amp; Cleanup</button>
+      <button id="downloadBtn" style="display:none;background:#d9534f;color:#fff;">🗑️ Delete Files from Cloud</button>
       <div id="downloadLinks" class="download-links"></div>
     </div>
   </div>
@@ -264,21 +437,21 @@
     // ── State ────────────────────────────────────────────────────────────
     let currentAoiGeojson = null;   // GeoJSON geometry object or null
     let pollTimer = null;
-    const task = { taskId: null, fileId: null, downloadUrl: null };
+    const task = { taskId: null, fileId: null, downloadUrls: [] };
 
     // ── DOM refs ─────────────────────────────────────────────────────────
-    const statusBadge   = document.getElementById("statusBadge");
-    const output        = document.getElementById("output");
-    const jobIdEl       = document.getElementById("jobId");
-    const fileIdEl      = document.getElementById("fileId");
-    const lastUpdateEl  = document.getElementById("lastUpdate");
-    const startBtn      = document.getElementById("startBtn");
-    const stopBtn       = document.getElementById("stopBtn");
-    const clearAoiBtn   = document.getElementById("clearAoiBtn");
-    const downloadsEl   = document.getElementById("downloads");
-    const downloadBtn   = document.getElementById("downloadBtn");
+    const statusBadge = document.getElementById("statusBadge");
+    const output = document.getElementById("output");
+    const jobIdEl = document.getElementById("jobId");
+    const fileIdEl = document.getElementById("fileId");
+    const lastUpdateEl = document.getElementById("lastUpdate");
+    const startBtn = document.getElementById("startBtn");
+    const stopBtn = document.getElementById("stopBtn");
+    const clearAoiBtn = document.getElementById("clearAoiBtn");
+    const downloadsEl = document.getElementById("downloads");
+    const downloadBtn = document.getElementById("downloadBtn");
     const downloadLinksEl = document.getElementById("downloadLinks");
-    const aoiHint       = document.getElementById("aoiHint");
+    const aoiHint = document.getElementById("aoiHint");
 
     // ── Leaflet map setup ─────────────────────────────────────────────────
     const map = L.map("map").setView([20, 0], 2);
@@ -296,11 +469,11 @@
     const drawControl = new L.Control.Draw({
       edit: { featureGroup: drawnItems },
       draw: {
-        polygon:   true,
+        polygon: true,
         rectangle: true,
-        circle:    false,
-        marker:    false,
-        polyline:  false,
+        circle: false,
+        marker: false,
+        polyline: false,
         circlemarker: false,
       },
     });
@@ -371,13 +544,13 @@
         downloadsEl.style.display = "none";
         downloadBtn.style.display = "none";
         downloadLinksEl.innerHTML = "";
-        task.downloadUrl = null;
+        task.downloadUrls = [];
         return;
       }
-      task.downloadUrl = files[0].url;
+      task.downloadUrls = files.map(f => f.url);
       downloadBtn.style.display = "inline-block";
       downloadLinksEl.innerHTML = files
-        .map((f) => `<div class="muted" style="margin-top:4px;">Ready: ${f.name}</div>`)
+        .map((f) => `<a href="${f.url}" target="_blank" class="download-link" download>⬇ Download ${f.name.split('/').pop()}</a><br>`)
         .join("");
       downloadsEl.style.display = "block";
     }
@@ -397,25 +570,17 @@
       return res.json();
     }
 
-    // ── Download + cleanup ────────────────────────────────────────────────
+    // ── Cloud cleanup (downloads are now plain <a> links above) ──────────
     async function triggerDownloadAndCleanup() {
       try {
         const apiBase = document.getElementById("apiBase").value.trim();
-        if (!task.downloadUrl || !task.fileId) throw new Error("No download URL available yet.");
-
-        const anchor = document.createElement("a");
-        anchor.href = task.downloadUrl;
-        anchor.target = "_blank";
-        anchor.download = "";
-        anchor.style.display = "none";
-        document.body.appendChild(anchor);
-        anchor.click();
-        anchor.remove();
+        if (!task.fileId) throw new Error("No file ID available for cleanup.");
 
         const deleteResult = await cleanupExportFiles(apiBase, task.fileId);
         output.textContent += `\n\nCleanup result:\n${jsonPretty(deleteResult)}`;
+        downloadsEl.style.display = "none";
       } catch (err) {
-        output.textContent = `Download/Cleanup error: ${err.message}`;
+        output.textContent = `Cleanup error: ${err.message}`;
       }
     }
 
@@ -435,7 +600,7 @@
       fileIdEl.textContent = "—";
       task.taskId = null;
       task.fileId = null;
-      task.downloadUrl = null;
+      task.downloadUrls = [];
       downloadsEl.style.display = "none";
       downloadBtn.style.display = "none";
       downloadLinksEl.innerHTML = "";
@@ -443,15 +608,29 @@
       try {
         const apiBase = document.getElementById("apiBase").value.trim();
 
+        // Collect checked data sources
+        const dataSources = Array.from(
+          document.querySelectorAll(".check-group input[type=checkbox][id^='ds_']:checked")
+        ).map(cb => cb.value);
+
+        // Collect checked export formats
+        const exportFormats = Array.from(
+          document.querySelectorAll(".check-group input[type=checkbox][id^='ef_']:checked")
+        ).map(cb => cb.value);
+
         // Build payload — aoi_geojson takes priority over country
         const payload = {
           indicator_id: document.getElementById("indicator").value,
-          map_year:     Number(document.getElementById("mapYear").value),
-          year_start:   Number(document.getElementById("yearStart").value),
-          year_end:     Number(document.getElementById("yearEnd").value),
-          threshold:    Number(document.getElementById("threshold").value),
-          gcs_bucket:   document.getElementById("gcsBucket").value.trim(),
-          gcs_prefix:   document.getElementById("gcsPrefix").value.trim() || null,
+          map_year: Number(document.getElementById("mapYear").value),
+          start_date: document.getElementById("start_date").value || null,
+          end_date: document.getElementById("end_date").value || null,
+          threshold: Number(document.getElementById("threshold").value),
+          resolution: document.getElementById("resolution").value,
+          priority: document.getElementById("priority").value,
+          data_sources: dataSources,
+          export_formats: exportFormats,
+          gcs_bucket: document.getElementById("gcsBucket").value.trim(),
+          gcs_prefix: document.getElementById("gcsPrefix").value.trim() || null,
         };
 
         if (currentAoiGeojson) {
@@ -475,8 +654,8 @@
 
         task.taskId = data.taskId || data.task_id || data.job_id;
         task.fileId = data.fileId || data.file_id;
-        jobIdEl.textContent  = task.taskId || "—";
-        fileIdEl.textContent = task.fileId  || "—";
+        jobIdEl.textContent = task.taskId || "—";
+        fileIdEl.textContent = task.fileId || "—";
         setStatus(data.status || "queued");
         output.textContent = jsonPretty(data);
         renderDownloadState({ ready: false, files: [] });
@@ -484,15 +663,34 @@
 
         if (!task.fileId) throw new Error("Response did not include fileId.");
 
+        // Calculate how many files to expect based on selected export formats
+        let expectedCount = 0;
+        if (exportFormats.includes("CSV")) expectedCount += 2;
+        if (exportFormats.includes("GeoJSON")) expectedCount += 2;
+        if (exportFormats.includes("GeoTIFF")) expectedCount += 1;
+
         stopBtn.disabled = false;
         pollTimer = setInterval(async () => {
           try {
             const statusData = await fetchExportStatus(apiBase, task.fileId);
-            setStatus(statusData.ready ? "completed" : "running");
+            const currentFileCount = Array.isArray(statusData?.files) ? statusData.files.length : 0;
+
+            if (currentFileCount > 0 && currentFileCount < expectedCount) {
+              setStatus(`partial (received ${currentFileCount}/${expectedCount})`);
+            } else if (currentFileCount >= expectedCount) {
+              setStatus("completed");
+              output.textContent = jsonPretty(statusData);
+              renderDownloadState(statusData);
+              lastUpdateEl.textContent = new Date().toLocaleString();
+              stopPolling();
+              return;
+            } else {
+              setStatus("running");
+            }
+
             output.textContent = jsonPretty(statusData);
             renderDownloadState(statusData);
             lastUpdateEl.textContent = new Date().toLocaleString();
-            if (statusData.ready === true) stopPolling();
           } catch (err) {
             setStatus("failed");
             output.textContent = `Polling error: ${err.message}`;
@@ -517,4 +715,5 @@
     updateAoiHint();
   </script>
 </body>
+
 </html>

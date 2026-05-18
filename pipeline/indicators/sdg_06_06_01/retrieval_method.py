@@ -1,14 +1,14 @@
-"""SDG 15.1.1 — Forest area as a proportion of total land area.
+"""SDG 6.6.1 — Water-related Ecosystems.
 
 NOTE: This is a scaffold / routing-proof stub.  Replace the body of
-``run_15_01_01`` with real Earth Engine logic when the indicator is
+``run_06_06_01`` with real Earth Engine logic when the indicator is
 ready for implementation.
 """
 
 from typing import Any, Dict, Optional
 
 
-def run_15_01_01(
+def run_06_06_01(
     map_year: int,
     year_start: int,
     year_end: int,
@@ -20,7 +20,7 @@ def run_15_01_01(
     """Stub implementation – returns a mock success payload.
 
     This proves that the API routing layer correctly dispatches
-    requests with ``indicator_id == '15.1.1'`` to this function.
+    requests with ``indicator_id == '6.6.1'`` to this function.
     Replace with real Earth Engine retrieval logic.
     """
     # -----------------------------------------------------------------------
@@ -40,12 +40,12 @@ def run_15_01_01(
     # -----------------------------------------------------------------------
     return {
         "status": "success",
-        "indicator": "15.1.1",
+        "indicator": "6.6.1",
         "country": country,
         "aoi_geojson": aoi_geojson,
         "map_year": map_year,
         "year_start": year_start,
         "year_end": year_end,
         "gcs_bucket": gcs_bucket,
-        "note": "Stub implementation for SDG 15.1.1 — no EE tasks were started.",
+        "note": "Stub implementation for SDG 6.6.1 — no EE tasks were started.",
     }

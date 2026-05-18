@@ -23,20 +23,29 @@ if __package__:
     # Running as part of the orbit_unops package (e.g. via uvicorn or import).
     from .indicators.sdg_11_03_01.retrieval_method import run_11_03_01
     from .indicators.sdg_15_01_01.retrieval_method import run_15_01_01
+    from .indicators.sdg_06_06_01.retrieval_method import run_06_06_01
+    from .indicators.sdg_15_04_02.retrieval_method import run_15_04_02
+    from .indicators.sdg_15_03_01.retrieval_method import run_15_03_01
+    from .indicators.sdg_11_01_01.retrieval_method import run_11_01_01
     from .utils.gee_common import get_task_status
 else:
     # Running directly from the pipeline/ folder.
     from indicators.sdg_11_03_01.retrieval_method import run_11_03_01
     from indicators.sdg_15_01_01.retrieval_method import run_15_01_01
+    from indicators.sdg_06_06_01.retrieval_method import run_06_06_01
+    from indicators.sdg_15_04_02.retrieval_method import run_15_04_02
+    from indicators.sdg_15_03_01.retrieval_method import run_15_03_01
+    from indicators.sdg_11_01_01.retrieval_method import run_11_01_01
     from utils.gee_common import get_task_status
 
-# ---------------------------------------------------------------------------
-# Indicator routing registry — add new indicators here without touching
-# the dispatch logic in _run_export_job.
-# ---------------------------------------------------------------------------
+
 _INDICATOR_REGISTRY: Dict[str, Any] = {
     "11.3.1": run_11_03_01,
     "15.1.1": run_15_01_01,
+    "6.6.1": run_06_06_01,
+    "15.4.2": run_15_04_02,
+    "15.3.1": run_15_03_01,
+    "11.1.1": run_11_01_01,
 }
 
 
@@ -68,33 +77,77 @@ class ExportRequest(BaseModel):
     trees: Optional[int] = None
     seed: Optional[int] = None
     project: Optional[str] = None
-    year_start: int = Field(
-        ..., description="First year of the multi-year prediction range (inclusive)"
+    year_start: Optional[int] = Field(
+        None, description="First year of the multi-year prediction range (inclusive)"
     )
-    year_end: int = Field(
-        ..., description="Last year of the multi-year prediction range (inclusive)"
+    year_end: Optional[int] = Field(
+        None, description="Last year of the multi-year prediction range (inclusive)"
     )
     export_name: Optional[str] = None
     gcs_bucket: str
     gcs_prefix: Optional[str] = None
 
-    # ------------------------------------------------------------------
-    # Model-level validation
-    # ------------------------------------------------------------------
+   
+    start_date: Optional[str] = Field(
+        None, description="ISO 8601 or MM/DD/YYYY start date sent by the frontend."
+    )
+    end_date: Optional[str] = Field(
+        None, description="ISO 8601 or MM/DD/YYYY end date sent by the frontend."
+    )
+    resolution: Optional[str] = None
+    priority: Optional[str] = None
+    data_sources: Optional[list[str]] = None
+    export_formats: Optional[list[str]] = None
+
+
 
     @model_validator(mode="after")
-    def validate_aoi_or_country(self) -> "ExportRequest":
-        """Ensure at least one spatial target is provided."""
+    def translate_dates_and_validate(self) -> "ExportRequest":
+        """Translate start_date/end_date to year_start/year_end and validate AOI.
+
+        Supported date formats:
+          * ISO 8601:   "2025-11-13"
+          * US slash:   "11/13/2025"
+
+        If start_date / end_date are supplied they take precedence over
+        year_start / year_end provided directly.  After translation both
+        year_start and year_end must be valid integers.
+        """
+        _DATE_FORMATS = ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y")
+
+        def _parse_year(date_str: str, field_name: str) -> int:
+            for fmt in _DATE_FORMATS:
+                try:
+                    return datetime.strptime(date_str.strip(), fmt).year
+                except ValueError:
+                    continue
+            raise ValueError(
+                f"Cannot parse '{field_name}' value '{date_str}'. "
+                "Expected ISO 8601 (YYYY-MM-DD) or MM/DD/YYYY format."
+            )
+
+        if self.start_date:
+            self.year_start = _parse_year(self.start_date, "start_date")
+        if self.end_date:
+            self.year_end = _parse_year(self.end_date, "end_date")
+
+        if self.year_start is None:
+            raise ValueError(
+                "'year_start' is required. Provide it directly or via 'start_date'."
+            )
+        if self.year_end is None:
+            raise ValueError(
+                "'year_end' is required. Provide it directly or via 'end_date'."
+            )
+
+        # Spatial target check (previously its own validator)
         if not self.country and not self.aoi_geojson:
             raise ValueError(
                 "At least one of 'country' or 'aoi_geojson' must be provided."
             )
         return self
 
-    # ------------------------------------------------------------------
-    # Field-level validators
-    # ------------------------------------------------------------------
-
+   
     @field_validator("indicator_id")
     @classmethod
     def validate_indicator_id(cls, value: str) -> str:
@@ -130,9 +183,10 @@ class ExportRequest(BaseModel):
 
     @field_validator("year_end")
     @classmethod
-    def validate_year_range(cls, value: int, info):
+    def validate_year_range(cls, value: Optional[int], info):
+        """Cross-field range check deferred to model_validator when dates are used."""
         year_start = info.data.get("year_start")
-        if year_start is not None and value < year_start:
+        if value is not None and year_start is not None and value < year_start:
             raise ValueError("year_end must be >= year_start")
         return value
 

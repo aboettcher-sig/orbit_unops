@@ -17,7 +17,9 @@ if __package__:
     from ...utils.gee_common import (
         _validate_inputs,
         aggregate_regional_stats,
+        export_image_to_gcs,
         export_table_to_gcs,
+        export_vector_to_gcs,
         initialize_ee,
     )
     from ...utils.ae_specific import embeddings_by_year, generate_stratified_sample
@@ -26,7 +28,9 @@ else:
     from utils.gee_common import (
         _validate_inputs,
         aggregate_regional_stats,
+        export_image_to_gcs,
         export_table_to_gcs,
+        export_vector_to_gcs,
         initialize_ee,
     )
     from utils.ae_specific import embeddings_by_year, generate_stratified_sample
@@ -57,6 +61,7 @@ def run_11_03_01(
     project: Optional[str] = None,
     export_name: Optional[str] = None,
     gcs_prefix: Optional[str] = None,
+    export_formats: Optional[list[str]] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Run the classification pipeline and start GCS table export tasks.
@@ -270,38 +275,84 @@ def run_11_03_01(
 
     yearly_area_collection = ee.FeatureCollection(yearly_area_features)
 
-    # Start GCS export tasks using the shared helper (Step 1)
-    stats_task = export_table_to_gcs(
-        collection=stats_feature_collection,
-        description=f"{final_export_name}_prediction_stats",
-        bucket=gcs_bucket,
-        filename_prefix=stats_file_name_prefix,
-    )
-    yearly_area_task = export_table_to_gcs(
-        collection=yearly_area_collection,
-        description=f"{final_export_name}_yearly_urban_area",
-        bucket=gcs_bucket,
-        filename_prefix=yearly_area_file_name_prefix,
-    )
+    # Initialise tracking dicts – populated below per requested format.
+    task_ids: Dict[str, Any] = {}
+    task_states: Dict[str, Any] = {}
+    task_descriptions: Dict[str, Any] = {}
 
-    stats_status = stats_task.status()
-    yearly_area_status = yearly_area_task.status()
+    # CSV export – runs when explicitly requested or when no formats are specified (fallback).
+    if not export_formats or any(fmt.lower() == "csv" for fmt in export_formats):
+        stats_task = export_table_to_gcs(
+            collection=stats_feature_collection,
+            description=f"{final_export_name}_prediction_stats",
+            bucket=gcs_bucket,
+            filename_prefix=stats_file_name_prefix,
+        )
+        yearly_area_task = export_table_to_gcs(
+            collection=yearly_area_collection,
+            description=f"{final_export_name}_yearly_urban_area",
+            bucket=gcs_bucket,
+            filename_prefix=yearly_area_file_name_prefix,
+        )
+        stats_status = stats_task.status()
+        yearly_area_status = yearly_area_task.status()
+        task_ids["prediction_stats"] = stats_status.get("id")
+        task_ids["yearly_urban_area_csv"] = yearly_area_status.get("id")
+        task_states["prediction_stats"] = stats_status.get("state")
+        task_states["yearly_urban_area_csv"] = yearly_area_status.get("state")
+        task_descriptions["prediction_stats"] = stats_status.get("description")
+        task_descriptions["yearly_urban_area_csv"] = yearly_area_status.get("description")
+
+    # Optional GeoJSON export.
+    if export_formats and any(fmt.lower() == "geojson" for fmt in export_formats):
+        stats_geojson_prefix = f"{stats_file_name_prefix}_geojson"
+        yearly_area_geojson_prefix = f"{yearly_area_file_name_prefix}_geojson"
+        stats_geojson_task = export_vector_to_gcs(
+            collection=stats_feature_collection,
+            description=f"{final_export_name}_prediction_stats_geojson",
+            bucket=gcs_bucket,
+            filename_prefix=stats_geojson_prefix,
+        )
+        yearly_area_geojson_task = export_vector_to_gcs(
+            collection=yearly_area_collection,
+            description=f"{final_export_name}_yearly_urban_area_geojson",
+            bucket=gcs_bucket,
+            filename_prefix=yearly_area_geojson_prefix,
+        )
+        stats_geojson_status = stats_geojson_task.status()
+        yearly_area_geojson_status = yearly_area_geojson_task.status()
+        task_ids["prediction_stats_geojson"] = stats_geojson_status.get("id")
+        task_ids["yearly_urban_area_geojson"] = yearly_area_geojson_status.get("id")
+        task_states["prediction_stats_geojson"] = stats_geojson_status.get("state")
+        task_states["yearly_urban_area_geojson"] = yearly_area_geojson_status.get("state")
+        task_descriptions["prediction_stats_geojson"] = stats_geojson_status.get("description")
+        task_descriptions["yearly_urban_area_geojson"] = yearly_area_geojson_status.get("description")
+        result["stats_geojson_prefix"] = stats_geojson_prefix
+        result["yearly_area_geojson_prefix"] = yearly_area_geojson_prefix
+
+    # Optional GeoTIFF export.
+    if export_formats and any(fmt.lower() == "geotiff" for fmt in export_formats):
+        geotiff_file_name_prefix = f"{base_prefix}_urban_extent"
+        geotiff_task = export_image_to_gcs(
+            image=output_image,
+            description=f"{final_export_name}_urban_extent_geotiff",
+            bucket=gcs_bucket,
+            filename_prefix=geotiff_file_name_prefix,
+            scale=10,
+            region=boundary_geometry,
+        )
+        geotiff_status = geotiff_task.status()
+        task_ids["urban_extent_geotiff"] = geotiff_status.get("id")
+        task_states["urban_extent_geotiff"] = geotiff_status.get("state")
+        task_descriptions["urban_extent_geotiff"] = geotiff_status.get("description")
+        result["geotiff_file_name_prefix"] = geotiff_file_name_prefix
 
     result.update(
         {
             "export_started": True,
-            "task_ids": {
-                "prediction_stats": stats_status.get("id"),
-                "yearly_urban_area_csv": yearly_area_status.get("id"),
-            },
-            "task_states": {
-                "prediction_stats": stats_status.get("state"),
-                "yearly_urban_area_csv": yearly_area_status.get("state"),
-            },
-            "task_descriptions": {
-                "prediction_stats": stats_status.get("description"),
-                "yearly_urban_area_csv": yearly_area_status.get("description"),
-            },
+            "task_ids": task_ids,
+            "task_states": task_states,
+            "task_descriptions": task_descriptions,
         }
     )
 

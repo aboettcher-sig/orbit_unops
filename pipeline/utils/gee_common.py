@@ -51,9 +51,7 @@ def get_task_status(task_id: str, project: Optional[str] = None) -> Dict[str, An
     return status_list[0]
 
 
-# ---------------------------------------------------------------------------
-# Export helpers
-# ---------------------------------------------------------------------------
+
 
 def export_table_to_gcs(
     collection: "ee.FeatureCollection",
@@ -65,6 +63,78 @@ def export_table_to_gcs(
     """Wrap ee.batch.Export.table.toCloudStorage and start the task.
 
     Returns the started task so callers can query ``task.status()``.
+    """
+    task = ee.batch.Export.table.toCloudStorage(
+        collection=collection,
+        description=description,
+        bucket=bucket,
+        fileNamePrefix=filename_prefix,
+        fileFormat=file_format,
+    )
+    task.start()
+    return task
+
+
+def export_image_to_gcs(
+    image: "ee.Image",
+    description: str,
+    bucket: str,
+    filename_prefix: str,
+    scale: int,
+    region: Optional["ee.Geometry"] = None,
+    crs: str = "EPSG:4326",
+) -> "ee.batch.Task":
+    """Export an ee.Image to Google Cloud Storage as a GeoTIFF.
+
+    Args:
+        image: The Earth Engine image to export.
+        description: Human-readable task description (used as EE task name).
+        bucket: Destination GCS bucket name.
+        filename_prefix: GCS object prefix / filename (without extension).
+        scale: Pixel resolution in metres.
+        region: Optional export geometry. If ``None`` the image footprint is used.
+        crs: Coordinate reference system (default ``"EPSG:4326"``).
+
+    Returns:
+        The started ``ee.batch.Task`` object so callers can monitor
+        ``task.status()``.
+    """
+    kwargs: Dict[str, Any] = dict(
+        image=image,
+        description=description,
+        bucket=bucket,
+        fileNamePrefix=filename_prefix,
+        scale=scale,
+        crs=crs,
+        fileFormat="GeoTIFF",
+    )
+    if region is not None:
+        kwargs["region"] = region
+
+    task = ee.batch.Export.image.toCloudStorage(**kwargs)
+    task.start()
+    return task
+
+
+def export_vector_to_gcs(
+    collection: "ee.FeatureCollection",
+    description: str,
+    bucket: str,
+    filename_prefix: str,
+    file_format: str = "GeoJSON",
+) -> "ee.batch.Task":
+    """Export an ee.FeatureCollection to Google Cloud Storage as GeoJSON.
+
+    Args:
+        collection: The Earth Engine feature collection to export.
+        description: Human-readable task description (used as EE task name).
+        bucket: Destination GCS bucket name.
+        filename_prefix: GCS object prefix / filename (without extension).
+        file_format: Export format passed to EE (default ``"GeoJSON"``).
+
+    Returns:
+        The started ``ee.batch.Task`` object so callers can monitor
+        ``task.status()``.
     """
     task = ee.batch.Export.table.toCloudStorage(
         collection=collection,
