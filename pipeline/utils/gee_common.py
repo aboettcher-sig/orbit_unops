@@ -51,6 +51,37 @@ def get_task_status(task_id: str, project: Optional[str] = None) -> Dict[str, An
     return status_list[0]
 
 
+def list_saved_models(project_path: str, prefix_filter: Optional[str] = None) -> list[str]:
+    """Retrieve saved Earth Engine classifier assets from a given project path."""
+    initialize_ee()
+    try:
+        models = []
+        page_token = None
+        while True:
+            params = {'parent': project_path}
+            if page_token:
+                params['pageToken'] = page_token
+                
+            assets = ee.data.listAssets(params)
+            
+            for asset in assets.get('assets', []):
+                asset_type = asset.get('type', '')
+                asset_id = asset.get('name', asset.get('id', ''))
+                if asset_type == 'CLASSIFIER' or '_classifier' in asset_id:
+                    if prefix_filter and prefix_filter not in asset_id:
+                        continue
+                    models.append(asset_id)
+                    
+            page_token = assets.get('nextPageToken')
+            if not page_token:
+                break
+                
+        return models
+    except Exception as exc:
+        print(f"Warning: Failed to list models for {project_path}: {exc}")
+        return []
+
+
 
 
 def export_table_to_gcs(

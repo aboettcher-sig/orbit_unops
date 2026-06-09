@@ -14,7 +14,7 @@ import yaml
 
 if __package__:
     # Running as part of the orbit_unops package.
-    from ...utils.gee_common import (
+    from ....utils.gee_common import (
         _validate_inputs,
         aggregate_regional_stats,
         export_image_to_gcs,
@@ -22,7 +22,7 @@ if __package__:
         export_vector_to_gcs,
         initialize_ee,
     )
-    from ...utils.ae_specific import embeddings_by_year, generate_stratified_sample
+    from ....utils.ae_specific import embeddings_by_year, generate_stratified_sample
 else:
     # Running directly from the sdg_11_03_01/ folder.
     from utils.gee_common import (
@@ -62,6 +62,7 @@ def run_11_03_01(
     export_name: Optional[str] = None,
     gcs_prefix: Optional[str] = None,
     export_formats: Optional[list[str]] = None,
+    model_asset_id: Optional[str] = None,
     **kwargs: Any,
 ) -> Dict[str, Any]:
     """Run the classification pipeline and start GCS table export tasks.
@@ -134,14 +135,29 @@ def run_11_03_01(
     # Use selected map-year embedding band names as model inputs
     input_properties = map_year_embeddings.bandNames()
 
-    classifier = (
-        ee.Classifier.smileRandomForest(numberOfTrees=trees)
-        .train(
-            features=filtered_collection,
-            classProperty="b1",
-            inputProperties=input_properties,
+    default_export_name = f"urban_extent_{region_label}_{year_start}-{year_end}"
+    final_export_name = export_name or default_export_name
+
+    classifier_export_task = None
+    if model_asset_id:
+        classifier = ee.Classifier.load(model_asset_id)
+    else:
+        classifier = (
+            ee.Classifier.smileRandomForest(numberOfTrees=trees)
+            .train(
+                features=filtered_collection,
+                classProperty="b1",
+                inputProperties=input_properties,
+            )
         )
-    )
+        assetId = f"projects/{project}/assets/{final_export_name}_classifier" if project else f"{final_export_name}_classifier"
+        classifier_export_task = ee.batch.Export.classifier.toAsset(
+            classifier=classifier, 
+            description=f"{final_export_name}_classifier_export", 
+            assetId=assetId
+        )
+        classifier_export_task.start()
+
     probability_classifier = classifier.setOutputMode("PROBABILITY")
 
     # Multi-year stack
@@ -154,8 +170,6 @@ def run_11_03_01(
     all_year_results = ee.ImageCollection(yearly_images).toBands().rename(year_names)
     output_image = all_year_results.gte(threshold).toByte()
 
-    default_export_name = f"urban_extent_{region_label}_{year_start}-{year_end}"
-    final_export_name = export_name or default_export_name
     normalized_prefix = (gcs_prefix or "").strip().strip("/")
     base_prefix = f"{normalized_prefix}/{final_export_name}" if normalized_prefix else final_export_name
     stats_file_name_prefix = f"{base_prefix}_prediction_stats"
@@ -279,6 +293,12 @@ def run_11_03_01(
     task_ids: Dict[str, Any] = {}
     task_states: Dict[str, Any] = {}
     task_descriptions: Dict[str, Any] = {}
+
+    if classifier_export_task:
+        classifier_status = classifier_export_task.status()
+        task_ids["classifier_export"] = classifier_status.get("id")
+        task_states["classifier_export"] = classifier_status.get("state")
+        task_descriptions["classifier_export"] = classifier_status.get("description")
 
     # CSV export – runs when explicitly requested or when no formats are specified (fallback).
     if not export_formats or any(fmt.lower() == "csv" for fmt in export_formats):

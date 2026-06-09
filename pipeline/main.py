@@ -18,33 +18,33 @@ from typing import Any, Dict
 
 if __package__:
     # Running as part of the orbit_unops package.
-    from .indicators.sdg_11_03_01.retrieval_method import run_11_03_01
-    from .indicators.sdg_15_01_01.retrieval_method import run_15_01_01
-    from .indicators.sdg_06_06_01.retrieval_method import run_06_06_01
-    from .indicators.sdg_15_04_02.retrieval_method import run_15_04_02
-    from .indicators.sdg_15_03_01.retrieval_method import run_15_03_01
-    from .indicators.sdg_11_01_01.retrieval_method import run_11_01_01
+    from .indicators.sdg_11_03_01.v1.retrieval_method import run_11_03_01
+    from .indicators.sdg_15_01_01.v1.retrieval_method import run_15_01_01
+    from .indicators.sdg_06_06_01.v1.retrieval_method import run_06_06_01
+    from .indicators.sdg_15_04_02.v1.retrieval_method import run_15_04_02
+    from .indicators.sdg_15_03_01.v1.retrieval_method import run_15_03_01
+    from .indicators.sdg_11_01_01.v1.retrieval_method import run_11_01_01
     from .utils.gee_common import get_task_status  # noqa: F401 (re-exported for api.py)
 else:
     # Running directly from the pipeline/ folder.
-    from indicators.sdg_11_03_01.retrieval_method import run_11_03_01
-    from indicators.sdg_15_01_01.retrieval_method import run_15_01_01
-    from indicators.sdg_06_06_01.retrieval_method import run_06_06_01
-    from indicators.sdg_15_04_02.retrieval_method import run_15_04_02
-    from indicators.sdg_15_03_01.retrieval_method import run_15_03_01
-    from indicators.sdg_11_01_01.retrieval_method import run_11_01_01
+    from indicators.sdg_11_03_01.v1.retrieval_method import run_11_03_01
+    from indicators.sdg_15_01_01.v1.retrieval_method import run_15_01_01
+    from indicators.sdg_06_06_01.v1.retrieval_method import run_06_06_01
+    from indicators.sdg_15_04_02.v1.retrieval_method import run_15_04_02
+    from indicators.sdg_15_03_01.v1.retrieval_method import run_15_03_01
+    from indicators.sdg_11_01_01.v1.retrieval_method import run_11_01_01
     from utils.gee_common import get_task_status  # noqa: F401
 
 # ---------------------------------------------------------------------------
 # Indicator routing registry — mirrors api.py so both layers stay in sync.
 # ---------------------------------------------------------------------------
 _INDICATOR_REGISTRY: Dict[str, Any] = {
-    "11.3.1": run_11_03_01,
-    "15.1.1": run_15_01_01,
-    "6.6.1": run_06_06_01,
-    "15.4.2": run_15_04_02,
-    "15.3.1": run_15_03_01,
-    "11.1.1": run_11_01_01,
+    "11.3.1": {"v1": run_11_03_01, "latest": "v1"},
+    "15.1.1": {"v1": run_15_01_01, "latest": "v1"},
+    "6.6.1": {"v1": run_06_06_01, "latest": "v1"},
+    "15.4.2": {"v1": run_15_04_02, "latest": "v1"},
+    "15.3.1": {"v1": run_15_03_01, "latest": "v1"},
+    "11.1.1": {"v1": run_11_01_01, "latest": "v1"},
 }
 
 
@@ -65,6 +65,20 @@ def build_parser() -> argparse.ArgumentParser:
         type=str,
         choices=list(_INDICATOR_REGISTRY),
         help="SDG indicator to run, e.g. '11.3.1'",
+    )
+    
+    parser.add_argument(
+        "--version",
+        type=str,
+        default=None,
+        help="Methodology version to run. Defaults to latest.",
+    )
+    
+    parser.add_argument(
+        "--model-asset-id",
+        type=str,
+        default=None,
+        help="EE Asset ID of a saved ee.Classifier to use for inference",
     )
 
     # ------------------------------------------------------------------
@@ -142,9 +156,18 @@ def main() -> None:
         "project": args.project,
         "export_name": args.export_name,
         "gcs_prefix": args.gcs_prefix,
+        "model_asset_id": args.model_asset_id,
     }
 
-    indicator_fn = _INDICATOR_REGISTRY[args.indicator_id]
+    registry_entry = _INDICATOR_REGISTRY[args.indicator_id]
+    version = args.version
+    if not version or version == "latest":
+        version = registry_entry["latest"]
+        
+    if version not in registry_entry:
+        parser.error(f"Version '{version}' not found for indicator '{args.indicator_id}'.")
+        
+    indicator_fn = registry_entry[version]
     result = indicator_fn(**run_kwargs)
     print(json.dumps(result, indent=2))
 

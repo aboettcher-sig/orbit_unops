@@ -312,6 +312,18 @@
       </div>
 
       <div>
+        <label for="version">Version <span style="font-weight:400;color:#888;">(optional)</span></label>
+        <input id="version" placeholder="e.g. v1" />
+      </div>
+
+      <div>
+        <label for="modelAssetId">Model Asset ID <span style="font-weight:400;color:#888;">(optional)</span></label>
+        <select id="modelAssetId">
+          <option value="">-- Train a new model --</option>
+        </select>
+      </div>
+
+      <div>
         <label for="mapYear">Map Year <span style="font-weight:400;color:#888;">(training)</span></label>
         <input id="mapYear" type="number" placeholder="e.g. 2019" />
       </div>
@@ -345,6 +357,11 @@
           <option value="standard">Standard</option>
           <option value="high">High</option>
         </select>
+      </div>
+
+      <div>
+        <label for="project">GCP Project</label>
+        <input id="project" value="" placeholder="e.g. damage-control-403117" />
       </div>
 
       <div>
@@ -618,6 +635,10 @@
           document.querySelectorAll(".check-group input[type=checkbox][id^='ef_']:checked")
         ).map(cb => cb.value);
 
+        const versionVal = document.getElementById("version").value.trim();
+        const modelAssetIdVal = document.getElementById("modelAssetId").value.trim();
+        const projectVal = document.getElementById("project").value.trim();
+
         // Build payload — aoi_geojson takes priority over country
         const payload = {
           indicator_id: document.getElementById("indicator").value,
@@ -632,6 +653,10 @@
           gcs_bucket: document.getElementById("gcsBucket").value.trim(),
           gcs_prefix: document.getElementById("gcsPrefix").value.trim() || null,
         };
+
+        if (versionVal) payload.version = versionVal;
+        if (modelAssetIdVal) payload.model_asset_id = modelAssetIdVal;
+        if (projectVal) payload.project = projectVal;
 
         if (currentAoiGeojson) {
           // Use drawn polygon; country is not required by the backend
@@ -672,6 +697,23 @@
         stopBtn.disabled = false;
         pollTimer = setInterval(async () => {
           try {
+            // 1. Check if the underlying job failed
+            try {
+              const jobRes = await fetch(`${apiBase}/exports/${task.taskId}`);
+              if (jobRes.ok) {
+                const jobData = await jobRes.json();
+                if (jobData.status === "failed") {
+                  setStatus("failed");
+                  output.textContent = "Backend Job Failed:\n" + (jobData.error || "Unknown error");
+                  stopPolling();
+                  return;
+                }
+              }
+            } catch (e) {
+              console.warn("Could not check job status:", e);
+            }
+
+            // 2. Check file readiness
             const statusData = await fetchExportStatus(apiBase, task.fileId);
             const currentFileCount = Array.isArray(statusData?.files) ? statusData.files.length : 0;
 
@@ -710,6 +752,38 @@
     startBtn.addEventListener("click", startExport);
     stopBtn.addEventListener("click", stopPolling);
     downloadBtn.addEventListener("click", triggerDownloadAndCleanup);
+
+    async function fetchModels() {
+      const apiBase = document.getElementById("apiBase").value.trim();
+      const projectInput = document.getElementById("project");
+      const project = projectInput ? projectInput.value.trim() : "";
+      const indicator = document.getElementById("indicator").value;
+
+      if (!project) return;
+      const projectPath = `projects/${project}/assets`;
+
+      try {
+        const res = await fetch(`${apiBase}/models?project=${encodeURIComponent(projectPath)}&indicator=${encodeURIComponent(indicator)}`);
+        if (!res.ok) throw new Error("Failed to fetch models");
+        const data = await res.json();
+        const modelSelect = document.getElementById("modelAssetId");
+
+        // Clear previous options
+        modelSelect.innerHTML = '<option value="">-- Train a new model --</option>';
+
+        data.models.forEach(model => {
+          const opt = document.createElement("option");
+          opt.value = model;
+          opt.textContent = model;
+          modelSelect.appendChild(opt);
+        });
+      } catch (err) {
+        console.error("Error fetching models:", err);
+      }
+    }
+
+    fetchModels();
+    document.getElementById("project").addEventListener("change", fetchModels);
 
     // Initialise hint on page load
     updateAoiHint();

@@ -21,31 +21,40 @@ except Exception:
 
 if __package__:
     # Running as part of the orbit_unops package (e.g. via uvicorn or import).
-    from .indicators.sdg_11_03_01.retrieval_method import run_11_03_01
-    from .indicators.sdg_15_01_01.retrieval_method import run_15_01_01
-    from .indicators.sdg_06_06_01.retrieval_method import run_06_06_01
-    from .indicators.sdg_15_04_02.retrieval_method import run_15_04_02
-    from .indicators.sdg_15_03_01.retrieval_method import run_15_03_01
-    from .indicators.sdg_11_01_01.retrieval_method import run_11_01_01
-    from .utils.gee_common import get_task_status
+    from .indicators.sdg_11_03_01.v1.retrieval_method import run_11_03_01
+    from .indicators.sdg_15_01_01.v1.retrieval_method import run_15_01_01
+    from .indicators.sdg_06_06_01.v1.retrieval_method import run_06_06_01
+    from .indicators.sdg_15_04_02.v1.retrieval_method import run_15_04_02
+    from .indicators.sdg_15_03_01.v1.retrieval_method import run_15_03_01
+    from .indicators.sdg_11_01_01.v1.retrieval_method import run_11_01_01
+    from .utils.gee_common import get_task_status, list_saved_models
 else:
     # Running directly from the pipeline/ folder.
-    from indicators.sdg_11_03_01.retrieval_method import run_11_03_01
-    from indicators.sdg_15_01_01.retrieval_method import run_15_01_01
-    from indicators.sdg_06_06_01.retrieval_method import run_06_06_01
-    from indicators.sdg_15_04_02.retrieval_method import run_15_04_02
-    from indicators.sdg_15_03_01.retrieval_method import run_15_03_01
-    from indicators.sdg_11_01_01.retrieval_method import run_11_01_01
-    from utils.gee_common import get_task_status
+    from indicators.sdg_11_03_01.v1.retrieval_method import run_11_03_01
+    from indicators.sdg_15_01_01.v1.retrieval_method import run_15_01_01
+    from indicators.sdg_06_06_01.v1.retrieval_method import run_06_06_01
+    from indicators.sdg_15_04_02.v1.retrieval_method import run_15_04_02
+    from indicators.sdg_15_03_01.v1.retrieval_method import run_15_03_01
+    from indicators.sdg_11_01_01.v1.retrieval_method import run_11_01_01
+    from utils.gee_common import get_task_status, list_saved_models
 
 
 _INDICATOR_REGISTRY: Dict[str, Any] = {
-    "11.3.1": run_11_03_01,
-    "15.1.1": run_15_01_01,
-    "6.6.1": run_06_06_01,
-    "15.4.2": run_15_04_02,
-    "15.3.1": run_15_03_01,
-    "11.1.1": run_11_01_01,
+    "11.3.1": {"v1": run_11_03_01, "latest": "v1"},
+    "15.1.1": {"v1": run_15_01_01, "latest": "v1"},
+    "6.6.1": {"v1": run_06_06_01, "latest": "v1"},
+    "15.4.2": {"v1": run_15_04_02, "latest": "v1"},
+    "15.3.1": {"v1": run_15_03_01, "latest": "v1"},
+    "11.1.1": {"v1": run_11_01_01, "latest": "v1"},
+}
+
+_INDICATOR_MODEL_PREFIXES: Dict[str, str] = {
+    "11.3.1": "urban_extent",
+    "15.1.1": "forest",
+    "6.6.1": "water",
+    "15.4.2": "mountain",
+    "15.3.1": "land",
+    "11.1.1": "slum",
 }
 
 
@@ -56,6 +65,12 @@ def utc_now_iso() -> str:
 class ExportRequest(BaseModel):
     indicator_id: str = Field(
         ..., description="SDG indicator identifier, e.g. '11.3.1' or '15.1.1'"
+    )
+    version: Optional[str] = Field(
+        None, description="Methodology version, defaults to latest"
+    )
+    model_asset_id: Optional[str] = Field(
+        None, description="EE Asset ID of a saved ee.Classifier to use for inference"
     )
     country: Optional[str] = Field(
         None,
@@ -342,11 +357,19 @@ def _run_export_job(job_id: str, request: ExportRequest) -> None:
             request_data.get("gcs_prefix"), file_id
         )
 
-        # Route to the correct indicator function based on indicator_id.
-        indicator_fn = _INDICATOR_REGISTRY[request.indicator_id]
+        # Route to the correct indicator function based on indicator_id and version.
+        registry_entry = _INDICATOR_REGISTRY[request.indicator_id]
+        version = request.version
+        if not version or version == "latest":
+            version = registry_entry["latest"]
+            
+        if version not in registry_entry:
+            raise ValueError(f"Version '{version}' not found for indicator '{request.indicator_id}'.")
+            
+        indicator_fn = registry_entry[version]
 
         # Strip API-layer-only keys that indicator functions don't accept.
-        indicator_data = {k: v for k, v in request_data.items() if k != "indicator_id"}
+        indicator_data = {k: v for k, v in request_data.items() if k not in ["indicator_id", "version"]}
 
         result = indicator_fn(**indicator_data)
         result["fileId"] = file_id
@@ -358,6 +381,18 @@ def _run_export_job(job_id: str, request: ExportRequest) -> None:
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/models")
+def get_models(project: Optional[str] = None, indicator: Optional[str] = None) -> Dict[str, list[str]]:
+    if not project:
+        return {"models": []}
+        
+    prefix_filter = None
+    if indicator and indicator in _INDICATOR_MODEL_PREFIXES:
+        prefix_filter = _INDICATOR_MODEL_PREFIXES[indicator]
+        
+    return {"models": list_saved_models(project, prefix_filter=prefix_filter)}
 
 
 @app.post("/exports", response_model=ExportStatusResponse, status_code=202)
