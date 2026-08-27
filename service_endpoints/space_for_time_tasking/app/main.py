@@ -1,8 +1,11 @@
+import os
 from threading import Lock
 from typing import Optional, Union
 
+import requests
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field
 
 from app.endpoint_functions import run_tasking
@@ -74,3 +77,21 @@ def tasking_endpoint(
 @app.get("/health")
 def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/results/{run_name}")
+def get_results(run_name: str):
+    bucket = os.environ["RESULTS_BUCKET"]
+    result = requests.get(
+        f"https://storage.googleapis.com/{bucket}/{run_name}/results.json",
+        timeout=60,
+    )
+    if result.status_code == 404:
+        raise HTTPException(status_code=404, detail="Results not found")
+    result.raise_for_status()
+    return Response(content=result.content, media_type="application/json")
+
+
+@app.get("/")
+def viewer():
+    return FileResponse("/app/viewer/index.html")

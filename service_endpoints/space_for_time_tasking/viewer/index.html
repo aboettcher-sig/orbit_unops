@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Space-for-time results</title>
+  <style>
+    :root { color-scheme: light; font: 15px/1.45 system-ui, sans-serif; }
+    body { margin: 0; background: #f5f6f4; color: #172019; }
+    main { max-width: 1100px; margin: auto; padding: 28px 18px 50px; }
+    h1, h2 { margin: 0 0 10px; }
+    h1 { font-size: 1.65rem; }
+    h2 { font-size: 1rem; }
+    a { color: #17643c; }
+    #status { margin: 8px 0 20px; color: #526057; }
+    .cards, .plots { display: grid; gap: 14px; }
+    .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+    .plots { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); margin-top: 14px; }
+    .card, figure, .assets { background: white; border: 1px solid #dfe4df; border-radius: 8px; padding: 14px; margin: 0; }
+    .value { font-size: 1.45rem; font-weight: 650; }
+    .label { color: #657168; font-size: .82rem; }
+    canvas { width: 100%; height: 260px; display: block; }
+    figcaption { font-weight: 650; margin-bottom: 8px; }
+    .assets { margin-top: 14px; }
+    .assets div { overflow-wrap: anywhere; margin: 5px 0; font-family: ui-monospace, monospace; font-size: .82rem; }
+    .legend { font-size: .8rem; color: #526057; }
+    .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 5px 0 12px; }
+    .dot:first-child { margin-left: 0; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>Space-for-time tasking results</h1>
+  <div id="status">Loading successful test run…</div>
+  <section class="cards" id="cards"></section>
+  <section class="plots">
+    <figure>
+      <figcaption>Training and held-out blocks</figcaption>
+      <div class="legend"><span class="dot" style="background:#297a4a"></span>Training <span class="dot" style="background:#d85b43"></span>Holdout</div>
+      <canvas id="split"></canvas>
+    </figure>
+    <figure><figcaption>Points per training block</figcaption><canvas id="points"></canvas></figure>
+    <figure><figcaption>Fraction of training blocks</figcaption><canvas id="blocks"></canvas></figure>
+    <figure><figcaption>ROC on held-out blocks</figcaption><canvas id="roc"></canvas></figure>
+  </section>
+  <section class="assets"><h2>Earth Engine assets</h2><div id="assets"></div></section>
+</main>
+<script>
+const DEFAULT_RESULTS = "https://space-for-time-tasking-384104229795.us-west1.run.app/results/peatlands-service-test-20260826b";
+const params = new URLSearchParams(location.search);
+const resultsUrl = params.get("results") || DEFAULT_RESULTS;
+
+function setup(canvas) {
+  const scale = devicePixelRatio || 1;
+  const box = canvas.getBoundingClientRect();
+  canvas.width = Math.round(box.width * scale);
+  canvas.height = Math.round(box.height * scale);
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  return {ctx, width: box.width, height: box.height};
+}
+
+function frame(canvas, xLabel, yLabel, xTicks, yTicks) {
+  const {ctx, width, height} = setup(canvas);
+  const p = {l: 48, r: 15, t: 12, b: 38};
+  const w = width - p.l - p.r, h = height - p.t - p.b;
+  ctx.strokeStyle = "#cfd6d0"; ctx.fillStyle = "#647067"; ctx.font = "11px system-ui";
+  ctx.beginPath(); ctx.moveTo(p.l, p.t); ctx.lineTo(p.l, p.t+h); ctx.lineTo(p.l+w, p.t+h); ctx.stroke();
+  yTicks.forEach(([v, label]) => { const y=p.t+h-v*h; ctx.fillText(label, 4, y+4); ctx.strokeStyle="#edf0ed"; ctx.beginPath(); ctx.moveTo(p.l,y); ctx.lineTo(p.l+w,y); ctx.stroke(); });
+  xTicks.forEach(([v, label]) => { const x=p.l+v*w; ctx.fillText(label, x-8, height-20); });
+  ctx.fillText(xLabel, p.l+w/2-30, height-3); ctx.save(); ctx.translate(12,p.t+h/2+25); ctx.rotate(-Math.PI/2); ctx.fillText(yLabel,0,0); ctx.restore();
+  return {ctx,p,w,h};
+}
+
+function lineChart(canvas, rows, xKey, xLabels) {
+  const aucs = rows.map(r => r.auc);
+  const min = Math.floor((Math.min(...aucs)-.01)*100)/100;
+  const max = 1;
+  const f = frame(canvas, xKey === "block_fraction" ? "Block fraction" : "Points / block", "AUC",
+    rows.map((r,i)=>[i/(rows.length-1), xLabels(r)]), [[0,min.toFixed(2)],[.5,((min+max)/2).toFixed(2)],[1,"1.00"]]);
+  f.ctx.strokeStyle="#297a4a"; f.ctx.fillStyle="#297a4a"; f.ctx.lineWidth=2; f.ctx.beginPath();
+  rows.forEach((r,i)=>{ const x=f.p.l+(i/(rows.length-1))*f.w; const y=f.p.t+f.h-(r.auc-min)/(max-min)*f.h; i ? f.ctx.lineTo(x,y) : f.ctx.moveTo(x,y); }); f.ctx.stroke();
+  rows.forEach((r,i)=>{ const x=f.p.l+(i/(rows.length-1))*f.w; const y=f.p.t+f.h-(r.auc-min)/(max-min)*f.h; f.ctx.beginPath(); f.ctx.arc(x,y,3.5,0,Math.PI*2); f.ctx.fill(); });
+}
+
+function splitPlot(canvas, points) {
+  const {ctx,width,height}=setup(canvas), p=18;
+  const xs=points.map(d=>d.lon), ys=points.map(d=>d.lat);
+  const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
+  ctx.fillStyle="#297a4a88";
+  points.forEach(d=>{ ctx.fillStyle=d.split==="holdout"?"#d85b43aa":"#297a4a66"; const x=p+(d.lon-minX)/(maxX-minX)*(width-2*p); const y=height-p-(d.lat-minY)/(maxY-minY)*(height-2*p); ctx.fillRect(x,y,1.6,1.6); });
+}
+
+function rocPlot(canvas, sk, ee) {
+  const f=frame(canvas,"False positive rate","True positive rate",[[0,"0"],[.5,".5"],[1,"1"]],[[0,"0"],[.5,".5"],[1,"1"]]);
+  const draw=(roc,color)=>{ f.ctx.strokeStyle=color; f.ctx.lineWidth=2; f.ctx.beginPath(); roc.fpr.forEach((x,i)=>{ const px=f.p.l+x*f.w, py=f.p.t+f.h-roc.tpr[i]*f.h; i?f.ctx.lineTo(px,py):f.ctx.moveTo(px,py); }); f.ctx.stroke(); };
+  f.ctx.strokeStyle="#aeb7b0"; f.ctx.setLineDash([5,5]); f.ctx.beginPath(); f.ctx.moveTo(f.p.l,f.p.t+f.h); f.ctx.lineTo(f.p.l+f.w,f.p.t); f.ctx.stroke(); f.ctx.setLineDash([]);
+  draw(sk.roc,"#297a4a"); draw(ee.roc,"#5b67b2");
+  f.ctx.fillStyle="#297a4a"; f.ctx.fillText(`sklearn ${sk.auc.toFixed(3)}`,f.p.l+8,f.p.t+14); f.ctx.fillStyle="#5b67b2"; f.ctx.fillText(`Earth Engine ${ee.auc.toFixed(3)}`,f.p.l+8,f.p.t+29);
+}
+
+function card(label,value) { return `<div class="card"><div class="value">${value}</div><div class="label">${label}</div></div>`; }
+
+fetch(resultsUrl).then(r=>{if(!r.ok) throw Error(`${r.status} ${r.statusText}`); return r.json();}).then(d=>{
+  document.getElementById("status").innerHTML=`Run <strong>${d.run.name}</strong> · <a href="${resultsUrl}">source JSON</a>`;
+  document.getElementById("cards").innerHTML=[
+    card("Observations",d.input.n_observations.toLocaleString()), card("Spatial blocks",d.input.n_blocks),
+    card("Selected points / block",d.selection.points_per_block), card("Recommended block fraction",`${d.selection.recommended_minimum_block_fraction*100}%`),
+    card("sklearn AUC",d.sklearn.auc.toFixed(3)), card("Earth Engine AUC",d.earth_engine.auc.toFixed(3))
+  ].join("");
+  document.getElementById("assets").innerHTML=Object.entries(d.assets).map(([k,v])=>`<div><strong>${k}:</strong> ${v}</div>`).join("");
+  splitPlot(document.getElementById("split"),d.split.points);
+  lineChart(document.getElementById("points"),d.experiments.points_per_block,"points_per_block",r=>r.points_per_block);
+  lineChart(document.getElementById("blocks"),d.experiments.block_fraction,"block_fraction",r=>`${Math.round(r.block_fraction*100)}%`);
+  rocPlot(document.getElementById("roc"),d.sklearn,d.earth_engine);
+}).catch(e=>{document.getElementById("status").textContent=`Could not load results: ${e.message}`;});
+</script>
+</body>
+</html>
