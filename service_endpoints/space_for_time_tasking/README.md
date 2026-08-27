@@ -3,6 +3,14 @@
 This folder contains the Cloud Run version of the workflow in
 `docs/studies/04_service_endpoints/space_for_time_tasking.ipynb`.
 
+## TODO
+
+- [ ] Make spatial blocking accept latitude and longitude only. Use `pyproj`
+  internally to create metre-based blocks from those coordinates, remove the
+  public `block_x_column` and `block_y_column` inputs and the `X_ITM`/`Y_ITM`
+  defaults, and validate the blocking function locally without rerunning the
+  Earth Engine workflow.
+
 The service accepts a public CSV URL and a caller's Google OAuth access token,
 runs the sampling and training workflow in the caller's Earth Engine project,
 saves the Earth Engine assets there, and returns the complete results JSON. It
