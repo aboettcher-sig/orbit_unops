@@ -5,34 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Space-for-time results</title>
   <style>
-    :root { color-scheme: light; font: 15px/1.45 system-ui, sans-serif; }
-    body { margin: 0; background: #f5f6f4; color: #172019; }
-    main { max-width: 1100px; margin: auto; padding: 28px 18px 50px; }
-    h1, h2 { margin: 0 0 10px; }
-    h1 { font-size: 1.65rem; }
-    h2 { font-size: 1rem; }
-    a { color: #17643c; }
-    #status { margin: 8px 0 20px; color: #526057; }
-    .cards, .plots { display: grid; gap: 14px; }
-    .cards { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-    .plots { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); margin-top: 14px; }
-    .card, figure, .assets { background: white; border: 1px solid #dfe4df; border-radius: 8px; padding: 14px; margin: 0; }
-    .value { font-size: 1.45rem; font-weight: 650; }
-    .label { color: #657168; font-size: .82rem; }
-    canvas { width: 100%; height: 260px; display: block; }
-    figcaption { font-weight: 650; margin-bottom: 8px; }
-    .assets { margin-top: 14px; }
-    .assets div { overflow-wrap: anywhere; margin: 5px 0; font-family: ui-monospace, monospace; font-size: .82rem; }
-    .legend { font-size: .8rem; color: #526057; }
+    :root { color-scheme: light; font: 15px/1.45 Arial, sans-serif; }
+    body { margin: 0; color: #202520; background: #fff; }
+    main { max-width: 1050px; margin: 38px auto; padding: 0 22px; }
+    h1 { margin: 0; font-size: 1.7rem; font-weight: 600; }
+    a { color: #236b45; }
+    #status { margin: 5px 0 18px; color: #667068; font-size: .88rem; }
+    #summary { margin: 0 0 26px; padding: 12px 0; border-block: 1px solid #dfe3df; font-size: 1rem; }
+    .plots { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 30px 36px; }
+    figure { margin: 0; }
+    canvas { width: 100%; height: 300px; display: block; }
+    figcaption { font-weight: 600; margin-bottom: 4px; }
+    .legend { font-size: .78rem; color: #667068; }
     .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin: 0 5px 0 12px; }
     .dot:first-child { margin-left: 0; }
+    @media (max-width: 720px) { .plots { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
 <main>
-  <h1>Space-for-time tasking results</h1>
+  <h1>Space-for-time evaluation</h1>
   <div id="status">Loading successful test run…</div>
-  <section class="cards" id="cards"></section>
+  <div id="summary"></div>
   <section class="plots">
     <figure>
       <figcaption>Training and held-out blocks</figcaption>
@@ -43,7 +37,6 @@
     <figure><figcaption>Fraction of training blocks</figcaption><canvas id="blocks"></canvas></figure>
     <figure><figcaption>ROC on held-out blocks</figcaption><canvas id="roc"></canvas></figure>
   </section>
-  <section class="assets"><h2>Earth Engine assets</h2><div id="assets"></div></section>
 </main>
 <script>
 const DEFAULT_RESULTS = "https://storage.googleapis.com/download/storage/v1/b/ee-seismosmsr-gis-space-for-time-results/o/peatlands-service-test-20260826b%2Fresults.json?alt=media";
@@ -75,7 +68,7 @@ function frame(canvas, xLabel, yLabel, xTicks, yTicks) {
 function lineChart(canvas, rows, xKey, xLabels) {
   const aucs = rows.map(r => r.auc);
   const min = Math.floor((Math.min(...aucs)-.01)*100)/100;
-  const max = 1;
+  const max = Math.ceil((Math.max(...aucs)+.01)*100)/100;
   const f = frame(canvas, xKey === "block_fraction" ? "Block fraction" : "Points / block", "AUC",
     rows.map((r,i)=>[i/(rows.length-1), xLabels(r)]), [[0,min.toFixed(2)],[.5,((min+max)/2).toFixed(2)],[1,"1.00"]]);
   f.ctx.strokeStyle="#297a4a"; f.ctx.fillStyle="#297a4a"; f.ctx.lineWidth=2; f.ctx.beginPath();
@@ -84,11 +77,15 @@ function lineChart(canvas, rows, xKey, xLabels) {
 }
 
 function splitPlot(canvas, points) {
-  const {ctx,width,height}=setup(canvas), p=18;
+  const {ctx,width,height}=setup(canvas), p={l:48,r:12,t:12,b:36};
   const xs=points.map(d=>d.lon), ys=points.map(d=>d.lat);
   const minX=Math.min(...xs), maxX=Math.max(...xs), minY=Math.min(...ys), maxY=Math.max(...ys);
-  ctx.fillStyle="#297a4a88";
-  points.forEach(d=>{ ctx.fillStyle=d.split==="holdout"?"#d85b43aa":"#297a4a66"; const x=p+(d.lon-minX)/(maxX-minX)*(width-2*p); const y=height-p-(d.lat-minY)/(maxY-minY)*(height-2*p); ctx.fillRect(x,y,1.6,1.6); });
+  const w=width-p.l-p.r, h=height-p.t-p.b;
+  ctx.strokeStyle="#cfd6d0"; ctx.fillStyle="#667068"; ctx.font="11px Arial";
+  ctx.strokeRect(p.l,p.t,w,h);
+  for(let i=0;i<3;i++){const t=i/2,x=p.l+t*w,y=p.t+h-t*h;ctx.fillText((minX+t*(maxX-minX)).toFixed(1),x-12,height-18);ctx.fillText((minY+t*(maxY-minY)).toFixed(1),7,y+4);}
+  ctx.fillText("Longitude",p.l+w/2-22,height-2);
+  points.forEach(d=>{ ctx.fillStyle=d.split==="holdout"?"#d85b43aa":"#297a4a55"; const x=p.l+(d.lon-minX)/(maxX-minX)*w; const y=p.t+h-(d.lat-minY)/(maxY-minY)*h; ctx.fillRect(x,y,1.5,1.5); });
 }
 
 function rocPlot(canvas, sk, ee) {
@@ -99,16 +96,9 @@ function rocPlot(canvas, sk, ee) {
   f.ctx.fillStyle="#297a4a"; f.ctx.fillText(`sklearn ${sk.auc.toFixed(3)}`,f.p.l+8,f.p.t+14); f.ctx.fillStyle="#5b67b2"; f.ctx.fillText(`Earth Engine ${ee.auc.toFixed(3)}`,f.p.l+8,f.p.t+29);
 }
 
-function card(label,value) { return `<div class="card"><div class="value">${value}</div><div class="label">${label}</div></div>`; }
-
 fetch(resultsUrl).then(r=>{if(!r.ok) throw Error(`${r.status} ${r.statusText}`); return r.json();}).then(d=>{
   document.getElementById("status").innerHTML=`Run <strong>${d.run.name}</strong> · <a href="${resultsUrl}">source JSON</a>`;
-  document.getElementById("cards").innerHTML=[
-    card("Observations",d.input.n_observations.toLocaleString()), card("Spatial blocks",d.input.n_blocks),
-    card("Selected points / block",d.selection.points_per_block), card("Recommended block fraction",`${d.selection.recommended_minimum_block_fraction*100}%`),
-    card("sklearn AUC",d.sklearn.auc.toFixed(3)), card("Earth Engine AUC",d.earth_engine.auc.toFixed(3))
-  ].join("");
-  document.getElementById("assets").innerHTML=Object.entries(d.assets).map(([k,v])=>`<div><strong>${k}:</strong> ${v}</div>`).join("");
+  document.getElementById("summary").innerHTML=`Selected <strong>${d.selection.points_per_block} points per block</strong> and <strong>${d.selection.recommended_minimum_block_fraction*100}% of training blocks</strong>. Held-out AUC: <strong>${d.sklearn.auc.toFixed(3)}</strong> in sklearn and <strong>${d.earth_engine.auc.toFixed(3)}</strong> in Earth Engine.`;
   splitPlot(document.getElementById("split"),d.split.points);
   lineChart(document.getElementById("points"),d.experiments.points_per_block,"points_per_block",r=>r.points_per_block);
   lineChart(document.getElementById("blocks"),d.experiments.block_fraction,"block_fraction",r=>`${Math.round(r.block_fraction*100)}%`);
