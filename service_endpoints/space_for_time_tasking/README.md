@@ -20,9 +20,10 @@ also writes the same JSON to the service-owned results bucket.
 - Test branch: `feature/space-for-time-tasking-service`
 - Dockerfile: `/service_endpoints/space_for_time_tasking/Dockerfile`
 
-Successful test result:
+Successful test outputs:
 
-https://storage.googleapis.com/ee-seismosmsr-gis-space-for-time-results/peatlands-service-test-20260826b/results.json
+- Viewer: https://storage.googleapis.com/ee-seismosmsr-gis-space-for-time-results/peatlands-service-viewer-20260826b/viewer.html
+- JSON: https://storage.googleapis.com/ee-seismosmsr-gis-space-for-time-results/peatlands-service-viewer-20260826b/results.json
 
 ## Deploy from the Google Cloud console
 

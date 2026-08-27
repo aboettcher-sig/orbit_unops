@@ -50,7 +50,7 @@
 </main>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const DEFAULT_RESULTS = "https://storage.googleapis.com/download/storage/v1/b/ee-seismosmsr-gis-space-for-time-results/o/peatlands-service-test-20260826b%2Fresults.json?alt=media";
+const DEFAULT_RESULTS = "https://storage.googleapis.com/download/storage/v1/b/ee-seismosmsr-gis-space-for-time-results/o/peatlands-service-viewer-20260826b%2Fresults.json?alt=media";
 const params = new URLSearchParams(location.search);
 const colocated = location.pathname.endsWith("/viewer.html") ? "./results.json" : null;
 const resultsUrl = params.get("results") || colocated || DEFAULT_RESULTS;
