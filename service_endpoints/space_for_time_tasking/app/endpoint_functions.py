@@ -4,6 +4,7 @@ import os
 import re
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 import ee
@@ -247,7 +248,8 @@ def run_tasking(config, access_token):
         if row["auc"] >= full_block_auc - auc_tolerance
     )
 
-    _, sklearn_probability, sklearn_metrics = fit_score(capped_train)
+    sklearn_model, sklearn_probability, sklearn_metrics = fit_score(capped_train)
+    sklearn_all_probability = sklearn_model.predict_proba(reference[bands])[:, 1]
     sklearn_fpr, sklearn_tpr, sklearn_thresholds = roc_curve(
         test.y, sklearn_probability
     )
@@ -259,10 +261,6 @@ def run_tasking(config, access_token):
     gee_train = reference_samples.filter(
         ee.Filter.inList("_row", selected_train_ids)
     )
-    gee_test = reference_samples.filter(
-        ee.Filter.inList("block_id", sorted(test_blocks))
-    )
-
     def gee_forest():
         return ee.Classifier.smileRandomForest(
             numberOfTrees=n_trees,
@@ -277,14 +275,21 @@ def run_tasking(config, access_token):
         .setOutputMode("PROBABILITY")
         .train(features=gee_train, classProperty="y", inputProperties=bands)
     )
-    gee_scored = ee.data.computeFeatures(
+    gee_all_scored = ee.data.computeFeatures(
         {
-            "expression": gee_test.classify(gee_holdout_model).select(
-                ["y", "classification"]
+            "expression": reference_samples.classify(gee_holdout_model).select(
+                ["_row", "y", "classification"]
             ),
             "fileFormat": "PANDAS_DATAFRAME",
+            "pageSize": 5000,
         }
     )
+    gee_all_scored["_row"] = gee_all_scored["_row"].astype(int)
+    gee_all_scored["y"] = gee_all_scored["y"].astype(int)
+    gee_all_scored["classification"] = gee_all_scored["classification"].astype(float)
+    gee_scored = gee_all_scored[
+        gee_all_scored["_row"].isin(test["_row"])
+    ].copy()
     gee_y = gee_scored["y"].astype(int).to_numpy()
     gee_probability = gee_scored["classification"].astype(float).to_numpy()
     gee_fpr, gee_tpr, gee_thresholds = roc_curve(gee_y, gee_probability)
@@ -314,9 +319,49 @@ def run_tasking(config, access_token):
     _wait(task)
     _wait_for_asset(model_asset)
 
-    split_data = reference[["lon", "lat", "block_id"]].copy()
-    split_data["split"] = np.where(
-        split_data.block_id.isin(test_blocks), "holdout", "train"
+    point_data = reference[["_row", "lon", "lat", "block_id", "y"]].copy()
+    point_data["split"] = np.where(
+        point_data.block_id.isin(test_blocks), "holdout", "train"
+    )
+    point_data["truth"] = point_data.pop("y").astype(int)
+    point_data["sklearn_probability"] = sklearn_all_probability
+    point_data["sklearn_prediction"] = (
+        point_data["sklearn_probability"] >= 0.5
+    ).astype(int)
+    point_data = point_data.merge(
+        gee_all_scored[["_row", "classification"]].rename(
+            columns={"classification": "earth_engine_probability"}
+        ),
+        on="_row",
+        how="inner",
+        validate="one_to_one",
+    )
+    point_data["earth_engine_prediction"] = (
+        point_data["earth_engine_probability"] >= 0.5
+    ).astype(int)
+
+    def outcomes(prediction):
+        return np.select(
+            [
+                (point_data.truth == 1) & (prediction == 1),
+                (point_data.truth == 0) & (prediction == 0),
+                (point_data.truth == 0) & (prediction == 1),
+                (point_data.truth == 1) & (prediction == 0),
+            ],
+            ["true_positive", "true_negative", "false_positive", "false_negative"],
+        )
+
+    point_data["sklearn_outcome"] = outcomes(point_data.sklearn_prediction)
+    point_data["earth_engine_outcome"] = outcomes(
+        point_data.earth_engine_prediction
+    )
+    point_data["models_disagree"] = (
+        point_data.sklearn_prediction != point_data.earth_engine_prediction
+    )
+    point_data["disagreement"] = np.where(
+        point_data.sklearn_prediction > point_data.earth_engine_prediction,
+        "sklearn_positive",
+        np.where(point_data.models_disagree, "earth_engine_positive", "agree"),
     )
     sk_tn, sk_fp, sk_fn, sk_tp = confusion_matrix(
         test.y, sklearn_probability >= 0.5
@@ -326,7 +371,7 @@ def run_tasking(config, access_token):
     ).ravel()
 
     report = {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "run": {
             "name": run_name,
             "reference_year": reference_year,
@@ -366,7 +411,7 @@ def run_tasking(config, access_token):
             "n_test_points": len(test),
             "n_training_blocks": int(train.block_id.nunique()),
             "n_test_blocks": int(test.block_id.nunique()),
-            "points": split_data.to_dict("records"),
+            "points": point_data.to_dict("records"),
         },
         "experiments": {
             "points_per_block": point_results,
@@ -425,14 +470,20 @@ def run_tasking(config, access_token):
     storage.Client().bucket(bucket_name).blob(object_name).upload_from_string(
         report_json, content_type="application/json"
     )
+    viewer_name = f"{run_name}/viewer.html"
+    storage.Client().bucket(bucket_name).blob(viewer_name).upload_from_string(
+        Path("/app/viewer/index.html").read_text(), content_type="text/html"
+    )
     results_uri = f"gs://{bucket_name}/{object_name}"
     results_url = f"https://storage.googleapis.com/{bucket_name}/{object_name}"
+    viewer_url = f"https://storage.googleapis.com/{bucket_name}/{viewer_name}"
 
     return {
         "status": "success",
         "run_name": run_name,
         "results_uri": results_uri,
         "results_url": results_url,
+        "viewer_url": viewer_url,
         "assets": report["assets"],
         "results": report,
     }

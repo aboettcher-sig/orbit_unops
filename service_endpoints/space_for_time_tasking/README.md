@@ -142,6 +142,7 @@ The response includes the full report under `results`, plus:
   "run_name": "...",
   "results_uri": "gs://.../results.json",
   "results_url": "https://storage.googleapis.com/.../results.json",
+  "viewer_url": "https://storage.googleapis.com/.../viewer.html",
   "assets": {
     "points": "projects/.../assets/..._points",
     "reference_samples": "projects/.../assets/..._reference_samples",
@@ -156,8 +157,17 @@ Earth Engine runtimes can vary.
 
 ## Viewer
 
-`viewer/index.html` is a static viewer with no dependencies. It defaults to the
-successful test result above. Serve the repository locally from this folder:
+Each successful run saves `viewer.html` beside `results.json`. The viewer loads
+that adjacent JSON and provides switchable Leaflet layers for the spatial
+split, sklearn outcomes, Earth Engine outcomes, and model disagreements. The
+background map is optional and off by default.
+
+Each point record includes truth, split, both model probabilities and predicted
+classes, both truth-relative outcome categories, and whether the models
+disagree.
+
+The repository copy defaults to the successful test result above. Serve it
+locally from this folder:
 
 ```bash
 python -m http.server 8000
