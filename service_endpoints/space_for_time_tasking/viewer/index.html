@@ -46,7 +46,7 @@
   <section class="assets"><h2>Earth Engine assets</h2><div id="assets"></div></section>
 </main>
 <script>
-const DEFAULT_RESULTS = "https://storage.googleapis.com/ee-seismosmsr-gis-space-for-time-results/peatlands-service-test-20260826b/results.json";
+const DEFAULT_RESULTS = "https://storage.googleapis.com/download/storage/v1/b/ee-seismosmsr-gis-space-for-time-results/o/peatlands-service-test-20260826b%2Fresults.json?alt=media";
 const params = new URLSearchParams(location.search);
 const resultsUrl = params.get("results") || DEFAULT_RESULTS;
 
@@ -93,7 +93,7 @@ function splitPlot(canvas, points) {
 
 function rocPlot(canvas, sk, ee) {
   const f=frame(canvas,"False positive rate","True positive rate",[[0,"0"],[.5,".5"],[1,"1"]],[[0,"0"],[.5,".5"],[1,"1"]]);
-  const draw=(roc,color)=>{ f.ctx.strokeStyle=color; f.ctx.lineWidth=2; f.ctx.beginPath(); roc.fpr.forEach((x,i)=>{ const px=f.p.l+x*f.w, py=f.p.t+f.h-roc.tpr[i]*f.h; i?f.ctx.lineTo(px,py):f.ctx.moveTo(px,py); }); f.ctx.stroke(); };
+  const draw=(roc,color)=>{ f.ctx.strokeStyle=color; f.ctx.lineWidth=2; f.ctx.beginPath(); roc.false_positive_rate.forEach((x,i)=>{ const px=f.p.l+x*f.w, py=f.p.t+f.h-roc.true_positive_rate[i]*f.h; i?f.ctx.lineTo(px,py):f.ctx.moveTo(px,py); }); f.ctx.stroke(); };
   f.ctx.strokeStyle="#aeb7b0"; f.ctx.setLineDash([5,5]); f.ctx.beginPath(); f.ctx.moveTo(f.p.l,f.p.t+f.h); f.ctx.lineTo(f.p.l+f.w,f.p.t); f.ctx.stroke(); f.ctx.setLineDash([]);
   draw(sk.roc,"#297a4a"); draw(ee.roc,"#5b67b2");
   f.ctx.fillStyle="#297a4a"; f.ctx.fillText(`sklearn ${sk.auc.toFixed(3)}`,f.p.l+8,f.p.t+14); f.ctx.fillStyle="#5b67b2"; f.ctx.fillText(`Earth Engine ${ee.auc.toFixed(3)}`,f.p.l+8,f.p.t+29);
