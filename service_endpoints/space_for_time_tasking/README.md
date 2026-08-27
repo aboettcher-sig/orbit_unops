@@ -157,9 +157,11 @@ Earth Engine runtimes can vary.
 ## Viewer
 
 `viewer/index.html` is a static viewer with no dependencies. It defaults to the
-successful test result above. The deployed service serves it at:
+successful test result above. Serve the repository locally from this folder:
 
-https://space-for-time-tasking-384104229795.us-west1.run.app/
+```bash
+python -m http.server 8000
+```
 
-The viewer reads public result JSON through `GET /results/{run_name}`. No bucket
-configuration is required for the viewer.
+Then open `http://localhost:8000/viewer/`. The viewer reads the public JSON URL
+directly.
