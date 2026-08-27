@@ -426,11 +426,13 @@ def run_tasking(config, access_token):
         report_json, content_type="application/json"
     )
     results_uri = f"gs://{bucket_name}/{object_name}"
+    results_url = f"https://storage.googleapis.com/{bucket_name}/{object_name}"
 
     return {
         "status": "success",
         "run_name": run_name,
         "results_uri": results_uri,
+        "results_url": results_url,
         "assets": report["assets"],
         "results": report,
     }
