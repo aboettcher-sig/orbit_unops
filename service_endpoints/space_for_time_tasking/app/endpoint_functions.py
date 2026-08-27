@@ -349,6 +349,7 @@ def run_tasking(config, access_token):
                 (point_data.truth == 1) & (prediction == 0),
             ],
             ["true_positive", "true_negative", "false_positive", "false_negative"],
+            default="unknown",
         )
 
     point_data["sklearn_outcome"] = outcomes(point_data.sklearn_prediction)
